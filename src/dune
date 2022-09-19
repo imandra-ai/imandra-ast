@@ -1,3 +1,6 @@
+(env
+  (_ (flags :standard -warn-error -a+8)))
+
 (library
  (name imandra_ast)
  (public_name imandra-ast)
