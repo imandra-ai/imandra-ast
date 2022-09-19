@@ -18,3 +18,7 @@ val id : t -> int
 module Tbl : CCHashtbl.S with type key = t
 module Map : CCMap.S with type key = t
 module Set : CCSet.S with type elt = t
+
+module Builtins : sig
+  val bool : t
+end

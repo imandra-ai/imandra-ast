@@ -426,3 +426,5 @@ end
 
 module Tbl = CCHashtbl.Make (As_key)
 module Map = CCMap.Make (As_key)
+
+let bool = mk_constr Uid.Builtins.bool []

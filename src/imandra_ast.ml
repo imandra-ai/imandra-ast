@@ -1,9 +1,10 @@
 (** Imandra AST *)
 
-module Type = Type
-module Term = Term
-module Loc = Loc
-module Uid = Uid
 module Decl = Decl
-module Util = Util
 module Error = Error
+module Loc = Loc
+module Term = Term
+module Type = Type
+module Uid = Uid
+module Util = Util
+module Var = Var

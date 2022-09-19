@@ -194,3 +194,7 @@ val same_base_type : Defs.t -> t -> t -> bool
 
 module Tbl : CCHashtbl.S with type key = t
 module Map : CCMap.S with type key = t
+
+(** {2 Some builtins} *)
+
+val bool : t

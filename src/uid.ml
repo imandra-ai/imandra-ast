@@ -29,3 +29,7 @@ end
 module Tbl = CCHashtbl.Make (As_key)
 module Map = CCMap.Make (As_key)
 module Set = CCSet.Make (As_key)
+
+module Builtins = struct
+  let bool = make_persistent "bool"
+end
