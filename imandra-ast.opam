@@ -3,6 +3,7 @@ opam-version: "2.0"
 version: "0.1"
 maintainer: ["the Imandra team"]
 authors: ["the Imandra team"]
+license: "MIT"
 homepage: "https://github.com/imandra-ai/imandra-ast/"
 bug-reports: "https://github.com/imandra-ai/imandra-ast/issues"
 depends: [
