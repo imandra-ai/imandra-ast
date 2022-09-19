@@ -1,6 +1,10 @@
 (** Location *)
 
-type t = private { filename: string; line_start: int; line_end: int }
+type t = private {
+  filename: string;
+  line_start: int;
+  line_end: int;
+}
 [@@deriving yojson, show, eq, ord]
 
 val filename : t -> string

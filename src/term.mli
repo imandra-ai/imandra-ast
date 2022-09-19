@@ -1,8 +1,14 @@
 open Common_
 
-type rec_flag = Recursive | Nonrecursive [@@deriving show, eq, ord, yojson]
+type rec_flag =
+  | Recursive
+  | Nonrecursive
+[@@deriving show, eq, ord, yojson]
 
-type apply_label = Nolabel | Label of string | Optional of string
+type apply_label =
+  | Nolabel
+  | Label of string
+  | Optional of string
 [@@deriving show, eq, ord, yojson]
 
 type const =
@@ -17,7 +23,11 @@ type const =
   | Const_real_approx of string
 [@@deriving yojson, eq, ord, show]
 
-type 'a with_loc = { view: 'a; loc: Loc.t } [@@deriving show, yojson, eq, ord]
+type 'a with_loc = {
+  view: 'a;
+  loc: Loc.t;
+}
+[@@deriving show, yojson, eq, ord]
 
 val view : 'a with_loc -> 'a
 
@@ -42,7 +52,11 @@ and pattern_view =
 [@@deriving yojson, eq, ord, show]
 
 (* branch in a pattern matching *)
-type 't vb = { pat: pattern; when_: 't option;  (** side condition *) expr: 't }
+type 't vb = {
+  pat: pattern;
+  when_: 't option;  (** side condition *)
+  expr: 't;
+}
 [@@deriving eq, show, ord, yojson]
 
 type t = t_view with_loc
@@ -54,12 +68,32 @@ and t_view =
   | Apply of Type.t * t * apply_arg list
   | Fun of Type.t * apply_label * Var.t * t
   | Ident of Var.t
-  | Construct of { c: Uid.t; ty: Type.t; args: t list; lbls: Uid.t list option }
+  | Construct of {
+      c: Uid.t;
+      ty: Type.t;
+      args: t list;
+      lbls: Uid.t list option;
+    }
   | Tuple of Type.t * t list
-  | Field of { data_ty: Type.t; ty: Type.t; f: Uid.t; t: t }
+  | Field of {
+      data_ty: Type.t;
+      ty: Type.t;
+      f: Uid.t;
+      t: t;
+    }
   | Record of Type.t * (Uid.t * t) list * t option
-  | Match of { loc: Loc.t option; ty: Type.t; lhs: t; bs: t vb list }
-  | Let_match of { loc: Loc.t option; flg: rec_flag; bs: t vb list; body: t }
+  | Match of {
+      loc: Loc.t option;
+      ty: Type.t;
+      lhs: t;
+      bs: t vb list;
+    }
+  | Let_match of {
+      loc: Loc.t option;
+      flg: rec_flag;
+      bs: t vb list;
+      body: t;
+    }
   | True
   | False
   | As of t * Type.t

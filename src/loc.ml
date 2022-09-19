@@ -1,4 +1,8 @@
-type t = { filename: string; line_start: int; line_end: int }
+type t = {
+  filename: string;
+  line_start: int;
+  line_end: int;
+}
 [@@deriving yojson, show, eq, ord]
 
 let filename self = self.filename

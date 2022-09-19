@@ -1,6 +1,10 @@
 (** Variables *)
 
-type t = private { id: Uid.t; ty: Type.t } [@@deriving show, eq, ord, yojson]
+type t = private {
+  id: Uid.t;
+  ty: Type.t;
+}
+[@@deriving show, eq, ord, yojson]
 
 val id : t -> Uid.t
 val name : t -> string

@@ -16,7 +16,11 @@ type 't adt_row = {
 [@@deriving yojson, show]
 (** List of constructors for an algebraic type *)
 
-type 't rec_row = { f: Uid.t; ty: 't } [@@deriving yojson, show]
+type 't rec_row = {
+  f: Uid.t;
+  ty: 't;
+}
+[@@deriving yojson, show]
 (** List of record fields *)
 
 type +'t view = private

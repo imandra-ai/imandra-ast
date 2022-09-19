@@ -3,10 +3,15 @@
 open Common_
 module J = Yojson.Safe
 
-type rec_flag = Recursive | Nonrecursive
+type rec_flag =
+  | Recursive
+  | Nonrecursive
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
-type apply_label = Nolabel | Label of string | Optional of string
+type apply_label =
+  | Nolabel
+  | Label of string
+  | Optional of string
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
 type const =
@@ -35,7 +40,10 @@ type const =
   | Const_real_approx of string
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
-type 'a with_loc = { view: 'a; loc: Loc.t }
+type 'a with_loc = {
+  view: 'a;
+  loc: Loc.t;
+}
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
 let[@inline] view self = self.view
@@ -61,7 +69,11 @@ and pattern_view =
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
 (* branch in a pattern matching *)
-type 't vb = { pat: pattern; when_: 't option; expr: 't }
+type 't vb = {
+  pat: pattern;
+  when_: 't option;
+  expr: 't;
+}
 [@@deriving yojson, eq, ord, show { with_path = false }]
 
 type t = t_view with_loc
@@ -73,12 +85,32 @@ and t_view =
   | Apply of Type.t * t * apply_arg list
   | Fun of Type.t * apply_label * Var.t * t
   | Ident of Var.t
-  | Construct of { c: Uid.t; ty: Type.t; args: t list; lbls: Uid.t list option }
+  | Construct of {
+      c: Uid.t;
+      ty: Type.t;
+      args: t list;
+      lbls: Uid.t list option;
+    }
   | Tuple of Type.t * t list
-  | Field of { data_ty: Type.t; ty: Type.t; f: Uid.t; t: t }
+  | Field of {
+      data_ty: Type.t;
+      ty: Type.t;
+      f: Uid.t;
+      t: t;
+    }
   | Record of Type.t * (Uid.t * t) list * t option
-  | Match of { loc: Loc.t option; ty: Type.t; lhs: t; bs: t vb list }
-  | Let_match of { loc: Loc.t option; flg: rec_flag; bs: t vb list; body: t }
+  | Match of {
+      loc: Loc.t option;
+      ty: Type.t;
+      lhs: t;
+      bs: t vb list;
+    }
+  | Let_match of {
+      loc: Loc.t option;
+      flg: rec_flag;
+      bs: t vb list;
+      body: t;
+    }
   | True
   | False
   | As of t * Type.t
@@ -119,13 +151,13 @@ let let_ ~loc ~flg bs body : t = mk ~loc @@ Let (flg, bs, body)
 let tuple ~loc ~ty l : t = mk ~loc @@ Tuple (ty, l)
 
 let apply ~loc ~ty f l : t =
-  match f.view, l with
+  match (f.view, l) with
   | _, [] -> f
   | Apply (_, f1, l1), _ -> mk ~loc @@ Apply (ty, f1, l1 @ l)
   | _ -> mk ~loc @@ Apply (ty, f, l)
 
 let rec equal (a : t) (b : t) =
-  match a.view, b.view with
+  match (a.view, b.view) with
   | True, True | False, False -> true
   | Const (c1, ty1), Const (c2, ty2) -> equal_const c1 c2 && Type.equal ty1 ty2
   | If (a1, b1, c1), If (a2, b2, c2) ->
@@ -172,7 +204,7 @@ and vb_equal { pat = pat1; when_ = when1; expr = expr1 }
   pat_equal pat1 pat2 && CCOption.equal equal when1 when2 && equal expr1 expr2
 
 and pat_equal (p1 : pattern) (p2 : pattern) =
-  match p1.view, p2.view with
+  match (p1.view, p2.view) with
   | P_true, P_true | P_false, P_false -> true
   | P_or (p11, p12), P_or (p21, p22) -> pat_equal p11 p21 && pat_equal p12 p22
   | P_var v1, P_var v2 -> Var.equal v1 v2

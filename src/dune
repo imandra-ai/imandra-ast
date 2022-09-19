@@ -1,5 +1,6 @@
 (library
-  (name imandra_ast)
-  (public_name imandra-ast)
-  (preprocess (pps ppx_deriving.std ppx_deriving_yojson))
-  (libraries containers zarith ppx_deriving.runtime yojson))
+ (name imandra_ast)
+ (public_name imandra-ast)
+ (preprocess
+  (pps ppx_deriving.std ppx_deriving_yojson))
+ (libraries containers zarith ppx_deriving.runtime yojson))

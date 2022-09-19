@@ -5,11 +5,18 @@ module Var = Uid
 
 type var = Var.t [@@deriving yojson, show, eq, ord]
 
-type 't adt_row = { c: Uid.t; labels: Uid.t list option; args: 't list }
+type 't adt_row = {
+  c: Uid.t;
+  labels: Uid.t list option;
+  args: 't list;
+}
 [@@deriving yojson, eq, ord, show { with_path = false }]
 (** List of constructors for an algebraic type *)
 
-type 't rec_row = { f: Uid.t; ty: 't }
+type 't rec_row = {
+  f: Uid.t;
+  ty: 't;
+}
 [@@deriving yojson, eq, ord, show { with_path = false }]
 (** List of record fields *)
 
@@ -358,15 +365,15 @@ let rec in_out_types defs (ty : t) : _ * t =
   match view ty with
   | Arrow (_, a, b) ->
     let ins, out = in_out_types defs b in
-    a :: ins, out
-  | _ -> [], ty
+    (a :: ins, out)
+  | _ -> ([], ty)
 
 let rec in_out_types_no_chase ty =
   match view ty with
   | Arrow (_, a, b) ->
     let ins, out = in_out_types_no_chase b in
-    a :: ins, out
-  | _ -> [], ty
+    (a :: ins, out)
+  | _ -> ([], ty)
 
 let rec n_args defs ty =
   let ty = chase_shallow_ defs ty in
@@ -404,7 +411,7 @@ let equal_chase_deep defs a b : bool =
 let same_base_type defs x y =
   let x = chase_rec defs Subst.empty x in
   let y = chase_rec defs Subst.empty y in
-  match view x, view y with
+  match (view x, view y) with
   | Constr (c, _), Constr (c', _) -> Uid.equal c c'
   | _ -> false
 

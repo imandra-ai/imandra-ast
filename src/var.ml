@@ -1,4 +1,8 @@
-type t = { id: Uid.t; ty: Type.t } [@@deriving show, eq, ord, yojson]
+type t = {
+  id: Uid.t;
+  ty: Type.t;
+}
+[@@deriving show, eq, ord, yojson]
 
 let id self = self.id
 let name self = Uid.name self.id
