@@ -140,14 +140,39 @@ let rec ty (t : t) =
   | Let (_, _, body) -> ty body
   | True | False -> Type.bool
 
-(* TODO: make [loc] non optional *)
-let[@inline] mk ~loc view : t = { view; loc }
+(* patterns *)
+
 let[@inline] mk_pat ~loc view : pattern = { view; loc }
+let p_or ~loc a b : pattern = mk_pat ~loc @@ P_or (a, b)
+let p_const ~loc ~ty c : pattern = mk_pat ~loc @@ P_const (c, ty)
+let p_var ~loc v : pattern = mk_pat ~loc @@ P_var v
+let p_any ~loc ty : pattern = mk_pat ~loc @@ P_any ty
+let p_tuple ~loc ~ty l : pattern = mk_pat ~loc @@ P_tuple (ty, l)
+let p_alias ~loc v p : pattern = mk_pat ~loc @@ P_alias (v, p)
+let p_record ~loc ~ty fs : pattern = mk_pat ~loc @@ P_record (ty, fs)
+
+let p_construct ~loc ~c ~ty ?lbls args : pattern =
+  mk_pat ~loc @@ P_construct { c; ty; lbls; args }
+
+let p_bool ~loc b : pattern =
+  mk_pat ~loc
+  @@
+  if b then
+    P_true
+  else
+    P_false
+
+(* terms *)
+
+let[@inline] mk ~loc view : t = { view; loc }
 let var ~loc v : t = mk ~loc @@ Ident v
 let const ~loc ~ty c : t = mk ~loc @@ Const (c, ty)
 let as_ ~loc t ty : t = mk ~loc @@ As (t, ty)
 let if_ ~loc a b c : t = mk ~loc @@ If (a, b, c)
 let let_ ~loc ~flg bs body : t = mk ~loc @@ Let (flg, bs, body)
+let record ~loc ~ty ?rest fields = mk ~loc @@ Record (ty, fields, rest)
+let field ~loc ~data_ty ~ty f t : t = mk ~loc @@ Field { ty; data_ty; f; t }
+let fun_ ~loc ~ty lbl v bod : t = mk ~loc @@ Fun (ty, lbl, v, bod)
 let tuple ~loc ~ty l : t = mk ~loc @@ Tuple (ty, l)
 
 let apply ~loc ~ty f l : t =
@@ -155,6 +180,24 @@ let apply ~loc ~ty f l : t =
   | _, [] -> f
   | Apply (_, f1, l1), _ -> mk ~loc @@ Apply (ty, f1, l1 @ l)
   | _ -> mk ~loc @@ Apply (ty, f, l)
+
+let bool ~loc b : t =
+  mk ~loc
+    (if b then
+      True
+    else
+      False)
+
+let vb ?when_ pat expr : t vb = { when_; pat; expr }
+
+let construct ~loc ~ty ?lbls ~c args : t =
+  mk ~loc @@ Construct { c; args; ty; lbls }
+
+let match_ ~loc ~ty lhs bs : t =
+  mk ~loc @@ Match { loc = Some loc; ty; lhs; bs }
+
+let let_match_ ~loc ~flg bs body : t =
+  mk ~loc @@ Let_match { flg; loc = Some loc; bs; body }
 
 let rec equal (a : t) (b : t) =
   match (a.view, b.view) with

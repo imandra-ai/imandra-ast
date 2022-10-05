@@ -1,5 +1,7 @@
 open Common_
 
+(** {1 Definitions} *)
+
 type rec_flag =
   | Recursive
   | Nonrecursive
@@ -103,18 +105,51 @@ and apply_arg = apply_label * t
 (* simple variable binding *)
 and binding = Var.t * t [@@deriving eq, show, ord, yojson]
 
+(** {1 Patterns} *)
+
 val pattern_ty : pattern -> Type.t
-val mk : loc:Loc.t -> t_view -> t
 val mk_pat : loc:Loc.t -> pattern_view -> pattern
+val p_or : loc:Loc.t -> pattern -> pattern -> pattern
+val p_var : loc:Loc.t -> Var.t -> pattern
+val p_tuple : loc:Loc.t -> ty:Type.t -> pattern list -> pattern
+val p_record : loc:Loc.t -> ty:Type.t -> (Uid.t * pattern) list -> pattern
+val p_any : loc:Loc.t -> Type.t -> pattern
+val p_alias : loc:Loc.t -> Var.t -> pattern -> pattern
+val p_bool : loc:Loc.t -> bool -> pattern
+val p_const : loc:Loc.t -> ty:Type.t -> const -> pattern
+
+val p_construct :
+  loc:Loc.t ->
+  c:Uid.t ->
+  ty:Type.t ->
+  ?lbls:Uid.t list ->
+  pattern list ->
+  pattern
+
+(** {1 Terms} *)
+
+val mk : loc:Loc.t -> t_view -> t
+val bool : loc:Loc.t -> bool -> t
 val ty : t -> Type.t
 val var : loc:Loc.t -> Var.t -> t
 val apply : loc:Loc.t -> ty:Type.t -> t -> apply_arg list -> t
 val const : loc:Loc.t -> ty:Type.t -> const -> t
+val field : loc:Loc.t -> data_ty:Type.t -> ty:Type.t -> Uid.t -> t -> t
+val match_ : loc:Loc.t -> ty:Type.t -> t -> t vb list -> t
+val let_match_ : loc:Loc.t -> flg:rec_flag -> t vb list -> t -> t
+val fun_ : loc:Loc.t -> ty:Type.t -> apply_label -> Var.t -> t -> t
+val record : loc:Loc.t -> ty:Type.t -> ?rest:t -> (Uid.t * t) list -> t
 val let_ : loc:Loc.t -> flg:rec_flag -> binding list -> t -> t
 val tuple : loc:Loc.t -> ty:Type.t -> t list -> t
 val if_ : loc:Loc.t -> t -> t -> t -> t
 val as_ : loc:Loc.t -> t -> Type.t -> t
 val equal : t -> t -> bool
+val vb : ?when_:t -> pattern -> t -> t vb
+
+val construct :
+  loc:Loc.t -> ty:Type.t -> ?lbls:Uid.t list -> c:Uid.t -> t list -> t
+
+(** {1 Functions} *)
 
 type fun_decl = private {
   name: Uid.t;
