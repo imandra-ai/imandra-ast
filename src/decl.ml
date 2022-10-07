@@ -4,6 +4,7 @@ type t = {
   loc: Loc.t;
   view: view;
 }
+[@@printer fun out self -> pp_view out self.view]
 
 and view =
   | Ty of Type.def list
