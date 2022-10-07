@@ -44,8 +44,10 @@ type 'a with_loc = {
   view: 'a;
   loc: Loc.t;
 }
-[@@deriving yojson, eq, ord, show { with_path = false }]
+[@@deriving yojson, eq, ord]
 
+let pp_with_loc ppx out { view; loc = _ } = ppx out view
+let show_with_loc ppx = Fmt.to_string (pp_with_loc ppx)
 let[@inline] view self = self.view
 
 type pattern = pattern_view with_loc
