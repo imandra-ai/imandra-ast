@@ -153,7 +153,7 @@ val construct :
 
 type fun_decl = private {
   name: Uid.t;
-  params: Var.t list;
+  pat: pattern;
   body: t;
   loc: Loc.t;
   name_loc: Loc.t;
@@ -167,7 +167,7 @@ val mk_fun_decl :
   ?name_loc:Loc.t ->
   loc:Loc.t ->
   name:Uid.t ->
-  params:Var.t list ->
+  pat:pattern ->
   body:t ->
   unit ->
   fun_decl

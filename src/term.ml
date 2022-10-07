@@ -284,7 +284,7 @@ let rec pattern_ty (p : pattern) =
 
 type fun_decl = {
   name: Uid.t;
-  params: Var.t list;
+  pat: pattern;
   body: t;
   loc: Loc.t;
   name_loc: Loc.t;  (** loc of [name] *)
@@ -293,7 +293,7 @@ type fun_decl = {
 [@@deriving yojson, eq, ord, show { with_path = false }]
 (** Function declaration *)
 
-let mk_fun_decl ?(codegen_tags = []) ?name_loc ~loc ~name ~params ~body () :
+let mk_fun_decl ?(codegen_tags = []) ?name_loc ~loc ~name ~pat ~body () :
     fun_decl =
   let name_loc = Option.value ~default:loc name_loc in
-  { name; params; body; loc; name_loc; codegen_tags }
+  { name; pat; body; loc; name_loc; codegen_tags }
