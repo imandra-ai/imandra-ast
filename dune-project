@@ -15,4 +15,4 @@
     ppx_deriving
     ppx_deriving_yojson
     (zarith (>= 1.12))
-    (containers (and (>= 3.6) (< 4.)))))
+    (containers (and (>= 3.7) (< 4.)))))
