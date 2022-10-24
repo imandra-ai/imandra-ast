@@ -1,0 +1,7 @@
+
+(library
+  (name imandra_ast_cg_rust)
+  (public_name imandra-ast.cg-rust)
+  (synopsis "rust codegen for imandra-ast")
+  (flags :standard -open Imandra_ast)
+  (libraries containers imandra-ast))
