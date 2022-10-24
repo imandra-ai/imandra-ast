@@ -29,3 +29,27 @@ let pp_text_newlines out (s : string) : unit =
       Format.pp_print_string out s)
     (CCString.lines s);
   Format.fprintf out "@]"
+
+let split_path s =
+  let rec aux s i =
+    if i >= 0 && s.[i] = '.' then
+      (* drop trailing dots *)
+      aux s (i - 1)
+    else (
+      match String.rindex_from s i '.' with
+      | j ->
+        let rhs = String.sub s (j + 1) (String.length s - j - 1) in
+        let lhs = String.split_on_char '.' @@ String.sub s 0 j in
+        (lhs, rhs)
+      | exception Not_found -> ([], s)
+    )
+  in
+  aux s (String.length s - 1)
+
+let join_path (x, y) =
+  if x = [] then
+    y
+  else
+    String.concat "." x ^ "." ^ y
+
+let chop_path s = snd @@ split_path s

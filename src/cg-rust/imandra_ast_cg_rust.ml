@@ -2,6 +2,7 @@ module Str_tbl = CCHashtbl.Make (CCString)
 
 let spf = Printf.sprintf
 let bpf = Printf.bprintf
+let[@inline] ( let@ ) f x = f x
 
 type state = {
   out: Buffer.t;
@@ -13,7 +14,6 @@ type state = {
 }
 
 type kind =
-  | K_ty_cstor
   | K_ty_var
   | K_cstor
   | K_field
@@ -27,7 +27,8 @@ use num_bigint::{BigInt as BigInt, Zero, One, Add};
 use num_rational::BigRational as Real;
 |rust}
 
-let gensym (self : state) (id : Uid.t) (base : string) : string =
+(* generate unique name from [base] and counter *)
+let gensym (self : state) (base : string) : string =
   let new_ () =
     let n = self.gen in
     self.gen <- n + 1;
@@ -51,17 +52,27 @@ let gensym (self : state) (id : Uid.t) (base : string) : string =
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid.Tbl.get_or_add self.uids ~k:id ~f:(fun id ->
       (* FIXME: escape rust keywords *)
+      let name = Uid.name id in
+      let mod_name, base_name = Util.split_path name in
       let base =
         match kind with
-        | K_ty_cstor | K_ty | K_cstor -> String.capitalize_ascii (Uid.name id)
+        | K_ty ->
+          let l =
+            if mod_name = [] then
+              [ base_name ]
+            else
+              mod_name
+          in
+          String.concat "" @@ List.map String.capitalize_ascii l
+        | K_cstor -> String.capitalize_ascii base_name
         | K_ty_var ->
-          let name = Uid.name id in
           (* remove the "'" *)
           String.capitalize_ascii (String.sub name 1 (String.length name - 1))
-        | K_var | K_fun | K_field -> String.uncapitalize_ascii (Uid.name id)
+        | K_field -> String.uncapitalize_ascii base_name
+        | K_var | K_fun -> String.uncapitalize_ascii name
       in
 
-      let s = gensym self id base in
+      let s = gensym self base in
       Str_tbl.add self.seen s ();
       Uid.Tbl.add self.uids id s;
       s)
@@ -72,7 +83,17 @@ let str_of_cg (self : state) (cg : state -> Buffer.t -> 'a -> unit) (x : 'a) :
   cg self buf x;
   Buffer.contents buf
 
-let cg_ty (self : state) (out : Buffer.t) (ty : Type.t) : unit =
+let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
+  (* put a box around the type, if it's a clique element *)
+  let maybe_box ty k =
+    match Type.view ty with
+    | Type.Constr (c, _) when CCList.mem ~eq:Uid.equal c clique ->
+      bpf out "Box<";
+      k ();
+      bpf out ">"
+    | _ -> k ()
+  in
+
   let rec recurse out ty =
     match Type.view ty with
     | Type.Var v ->
@@ -98,25 +119,27 @@ let cg_ty (self : state) (out : Buffer.t) (ty : Type.t) : unit =
         l;
       bpf out ")"
     | Type.Constr (c, []) ->
+      let@ () = maybe_box ty in
       let repr =
         match Uid.name c with
         | "int" -> "BigInt"
         | "real" -> "Real"
-        | _name -> str_of_id self c K_cstor ^ spf " /* %s */" _name
+        | _name -> str_of_id self c K_cstor
       in
 
       bpf out "%s" repr
     | Type.Constr (c, args) ->
-      (* FIXME: see if [c] takes a record *)
-      bpf out "%s(" (str_of_id self c K_cstor);
+      let@ () = maybe_box ty in
+      bpf out "%s<" (str_of_id self c K_cstor);
       List.iter (fun a -> bpf out "%a," recurse a) args;
-      bpf out ")"
+      bpf out ">"
   in
 
   let ty = Type.chase_deep self.ty_defs ty in
   recurse out ty
 
-let cg_ty_decl (self : state) (out : Buffer.t) (ty_def : Type.def) : unit =
+let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
+    unit =
   let name = str_of_id self ty_def.name K_ty in
   let args =
     match ty_def.params with
@@ -132,7 +155,8 @@ let cg_ty_decl (self : state) (out : Buffer.t) (ty_def : Type.def) : unit =
     bpf out "pub struct %s%s {\n" name args;
     List.iter
       (fun { Type.f; ty } ->
-        bpf out "  pub %s: %a,\n" (str_of_id self f K_field) (cg_ty self) ty)
+        bpf out "  pub %s: %a,\n" (str_of_id self f K_field)
+          (cg_ty ~clique self) ty)
       rows;
 
     bpf out "}"
@@ -172,15 +196,22 @@ let cg_ty_decl (self : state) (out : Buffer.t) (ty_def : Type.def) : unit =
   bpf out "\n\n"
 
 let cg_fun (self : state) (out : Buffer.t) (f : Term.fun_decl) : unit =
-  bpf self.out "// TODO: fun %s\n" (str_of_id self f.name K_fun);
+  bpf self.out "// skip: fun %s\n" (str_of_id self f.name K_fun);
   () (* TODO *)
 
 let cg_decl (self : state) (d : Decl.t) : unit =
   match d.view with
-  | Decl.Ty defs -> List.iter (cg_ty_decl self self.out) defs
+  | Decl.Ty { tys = defs; recursive } ->
+    let clique =
+      if recursive then
+        List.map (fun d -> d.Type.name) defs
+      else
+        []
+    in
+    List.iter (cg_ty_decl self ~clique self.out) defs
   | Decl.Fun { recursive = _; fs } -> List.iter (cg_fun self self.out) fs
-  | Decl.Module_alias _ | Decl.Module _ ->
-    bpf self.out "// TODO: module\n";
+  | Decl.Module_alias (name, _) | Decl.Module { name; _ } ->
+    bpf self.out "// skip: module %s\n" (Uid.name name);
     () (* TODO *)
 
 let codegen (decls : Decl.t list) : string =
