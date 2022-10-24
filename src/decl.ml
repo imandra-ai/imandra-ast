@@ -12,6 +12,11 @@ and view =
       recursive: bool;
       fs: Term.fun_decl list;
     }
+  | Module_alias of Uid.t * Uid.t
+  | Module of {
+      name: Uid.t;
+      items: t list;
+    }
 [@@deriving show { with_path = false }, yojson]
 
 type list_of = t list [@@deriving show, yojson]

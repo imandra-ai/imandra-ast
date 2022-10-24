@@ -1,6 +1,6 @@
 (** Location *)
 
-type t = private {
+type t = {
   filename: string;
   line_start: int;
   line_end: int;
