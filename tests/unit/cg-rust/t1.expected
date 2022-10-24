@@ -1,0 +1,23 @@
+rust code:
+```
+// generated from imandra-ast
+
+use num_bigint::{BigInt as BigInt, Zero, One, Add};
+use num_rational::BigRational as Real;
+
+#[derive(Eq,PartialEq,Clone,Debug)]
+pub struct Complex {
+  pub re: BigInt,
+  pub im: BigInt,
+}
+
+#[derive(Eq,PartialEq,Clone,Debug)]
+pub enum Point {
+  Polar(BigInt,BigInt),
+  Cartesian(Complex /* complex */),
+}
+
+// TODO: fun c_plus
+// TODO: fun is_cartesian
+
+```

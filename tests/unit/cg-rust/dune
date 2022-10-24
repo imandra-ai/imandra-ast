@@ -1,0 +1,4 @@
+
+(tests
+  (names t1)
+  (libraries containers yojson imandra-ast imandra-ast.cg-rust))
