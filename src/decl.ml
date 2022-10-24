@@ -7,10 +7,7 @@ type t = {
 [@@printer fun out self -> pp_view out self.view]
 
 and view =
-  | Ty of {
-      recursive: bool;
-      tys: Type.def list;
-    }
+  | Ty of { tys: Type.def list }
   | Fun of {
       recursive: bool;
       fs: Term.fun_decl list;
@@ -28,7 +25,7 @@ open struct
   let mk_ ~loc view : t = { loc; view }
 end
 
-let ty ~loc ~recursive defs : t = mk_ ~loc @@ Ty { tys = defs; recursive }
+let ty ~loc defs : t = mk_ ~loc @@ Ty { tys = defs }
 let fun_ ~loc ~recursive defs : t = mk_ ~loc @@ Fun { recursive; fs = defs }
 
 let ty_defs_of_decls (decls : t list) : Type.Defs.t =

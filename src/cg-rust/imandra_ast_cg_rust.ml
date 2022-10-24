@@ -201,13 +201,8 @@ let cg_fun (self : state) (out : Buffer.t) (f : Term.fun_decl) : unit =
 
 let cg_decl (self : state) (d : Decl.t) : unit =
   match d.view with
-  | Decl.Ty { tys = defs; recursive } ->
-    let clique =
-      if recursive then
-        List.map (fun d -> d.Type.name) defs
-      else
-        []
-    in
+  | Decl.Ty { tys = defs } ->
+    let clique = List.map (fun d -> d.Type.name) defs in
     List.iter (cg_ty_decl self ~clique self.out) defs
   | Decl.Fun { recursive = _; fs } -> List.iter (cg_fun self self.out) fs
   | Decl.Module_alias (name, _) | Decl.Module { name; _ } ->
