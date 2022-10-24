@@ -1,4 +1,5 @@
 module Str_tbl = CCHashtbl.Make (CCString)
+module Fmt = CCFormat
 
 let spf = Printf.sprintf
 let bpf = Printf.bprintf
@@ -58,10 +59,10 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
         match kind with
         | K_ty ->
           let l =
-            if mod_name = [] then
-              [ base_name ]
-            else
-              mod_name
+            match (mod_name, base_name) with
+            | [], _ -> [ base_name ]
+            | _, "t" -> mod_name
+            | _ -> mod_name @ [ base_name ]
           in
           String.concat "" @@ List.map String.capitalize_ascii l
         | K_cstor -> String.capitalize_ascii base_name
@@ -72,6 +73,11 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
         | K_var | K_fun -> String.uncapitalize_ascii name
       in
 
+      (*
+      Fmt.printf "base for %a is %S (mod=%a, base=%S)@." Uid.pp id base
+        Fmt.Dump.(list string)
+        mod_name base_name;
+      *)
       let s = gensym self base in
       Str_tbl.add self.seen s ();
       Uid.Tbl.add self.uids id s;
@@ -124,13 +130,13 @@ let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
         match Uid.name c with
         | "int" -> "BigInt"
         | "real" -> "Real"
-        | _name -> str_of_id self c K_cstor
+        | _name -> str_of_id self c K_ty
       in
 
       bpf out "%s" repr
     | Type.Constr (c, args) ->
       let@ () = maybe_box ty in
-      bpf out "%s<" (str_of_id self c K_cstor);
+      bpf out "%s<" (str_of_id self c K_ty);
       List.iter (fun a -> bpf out "%a," recurse a) args;
       bpf out ">"
   in
@@ -173,7 +179,7 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
           List.iteri
             (fun i a ->
               if i > 0 then bpf out ",";
-              cg_ty self out a)
+              cg_ty ~clique self out a)
             args;
           bpf out ")"
         | _, Some lbls ->
@@ -182,7 +188,9 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
           bpf out "{\n";
           List.iter2
             (fun lbl a ->
-              bpf out "%s: %a," (str_of_id self lbl K_field) (cg_ty self) a)
+              bpf out "%s: %a,"
+                (str_of_id self lbl K_field)
+                (cg_ty ~clique self) a)
             lbls args;
           bpf out "}");
         bpf out ",\n")
@@ -191,7 +199,7 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
   | Type.Builtin _ -> assert false (* TODO *)
   | Type.Alias { target } ->
     bpf out "pub type %s%s = " name args;
-    cg_ty self out target
+    cg_ty ~clique self out target
   | Type.Other | Type.Skolem -> bpf out "// (other)\npub struct %s%s;" name args);
   bpf out "\n\n"
 
