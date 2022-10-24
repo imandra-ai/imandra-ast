@@ -53,8 +53,11 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
       (* FIXME: escape rust keywords *)
       let base =
         match kind with
-        | K_ty_cstor | K_ty | K_ty_var | K_cstor ->
-          String.capitalize_ascii (Uid.name id)
+        | K_ty_cstor | K_ty | K_cstor -> String.capitalize_ascii (Uid.name id)
+        | K_ty_var ->
+          let name = Uid.name id in
+          (* remove the "'" *)
+          String.capitalize_ascii (String.sub name 1 (String.length name - 1))
         | K_var | K_fun | K_field -> String.uncapitalize_ascii (Uid.name id)
       in
 
@@ -125,6 +128,7 @@ let cg_ty_decl (self : state) (out : Buffer.t) (ty_def : Type.def) : unit =
 
   (match ty_def.decl with
   | Type.Record rows ->
+    bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n";
     bpf out "pub struct %s%s {\n" name args;
     List.iter
       (fun { Type.f; ty } ->
@@ -133,6 +137,7 @@ let cg_ty_decl (self : state) (out : Buffer.t) (ty_def : Type.def) : unit =
 
     bpf out "}"
   | Type.Algebraic cstors ->
+    bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n";
     bpf out "pub enum %s%s {\n" name args;
     List.iter
       (fun { Type.c; args; labels } ->
