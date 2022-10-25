@@ -14,10 +14,10 @@ pub struct Complex {
 #[derive(Eq,PartialEq,Clone,Debug)]
 pub enum Point {
   Polar(BigInt,BigInt),
-  Cartesian(Complex /* complex */),
+  Cartesian(Complex),
 }
 
-// TODO: fun c_plus
-// TODO: fun is_cartesian
+// skip: fun c_plus
+// skip: fun is_cartesian
 
 ```
