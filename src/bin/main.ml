@@ -1,21 +1,7 @@
 module Fmt = CCFormat
 module A = Imandra_ast
 
-let main () =
-  let out = ref "" in
-  let cg_rust = ref false in
-  let files = ref [] in
-  let options =
-    [
-      ("-o", Arg.Set_string out, " output file");
-      ("--rust", Arg.Set cg_rust, " generate rust code");
-    ]
-    |> Arg.align
-  in
-
-  Arg.parse options (fun f -> files := f :: !files) "imltk [option]* [file]+";
-  let files = List.rev !files in
-
+let main lang in_paths out_path =
   (* parse input files *)
   let decls =
     CCList.flat_map
@@ -32,18 +18,59 @@ let main () =
         | Error err ->
           Fmt.eprintf "could not decode AST: %s@." err;
           exit 2)
-      files
+      in_paths
   in
 
   Fmt.eprintf "parsed %d declarations@." (List.length decls);
 
-  if !cg_rust then (
+  match lang with
+  | `Rust ->
     let code = Imandra_ast_cg_rust.codegen decls in
-    if !out <> "" then
-      CCIO.File.write_exn !out code
-    else
-      print_endline code
-  );
-  ()
+    (match out_path with
+    | Some out_path -> CCIO.File.write_exn out_path code
+    | None -> print_endline code)
+  | `OCaml -> print_endline "OCaml code generation not implemented"
 
-let () = main ()
+open Cmdliner
+
+let _ =
+  let languages = [ ("ocaml", `OCaml); ("rust", `Rust) ] in
+  let default_language = `OCaml in
+  let languages_s =
+    String.concat ", "
+      (List.map (fun (lang, _) -> Printf.sprintf "%S" lang) languages)
+  in
+  let default_language_s, _ =
+    List.find (fun (_, l) -> l = default_language) languages
+  in
+
+  let cmd =
+    let doc =
+      "from a JSON description of Imandra IML values, generate OCaml or Rust \
+       code for {de}serializing those values"
+    in
+    let lang =
+      let doc =
+        Printf.sprintf
+          "the target language (either %s, where the default is %S)" languages_s
+          default_language_s
+      in
+      Arg.(
+        required
+        & opt (some (enum languages)) None
+        & info [ "l"; "lang"; "language" ] ~docv:"STRING" ~doc)
+    in
+    let in_paths =
+      let doc = "paths of input JSON file representing Imandra IML values" in
+      Arg.(value (pos_all string [] (info [] ~doc)))
+    in
+    let out_path =
+      let doc = "path of output file (if absent, stdout)" in
+      Arg.(
+        value
+        & opt (some string) None
+        & info [ "o"; "output" ] ~docv:"PATH" ~doc)
+    in
+    Cmd.v (Cmd.info "imltk" ~doc) Term.(const main $ lang $ in_paths $ out_path)
+  in
+  Cmd.eval ~catch:false cmd

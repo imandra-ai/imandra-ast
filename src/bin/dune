@@ -3,4 +3,4 @@
   (name main)
   (public_name imltk)
   ;(synopsis "Toolkit for imandra-ast")
-  (libraries containers yojson imandra-ast imandra-ast.cg-rust))
+  (libraries containers yojson imandra-ast imandra-ast.cg-rust cmdliner))

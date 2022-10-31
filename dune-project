@@ -12,6 +12,7 @@
   (name imandra-ast)
   (depends
     (yojson (>= 1.6))
+    cmdliner
     ppx_deriving
     ppx_deriving_yojson
     (zarith (>= 1.12))
