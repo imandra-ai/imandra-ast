@@ -26,13 +26,15 @@ let main lang in_paths out_path =
 
   Fmt.eprintf "parsed %d declarations@." (List.length decls);
 
-  match lang with
-  | `Rust ->
-    let code = Imandra_ast_cg_rust.codegen decls in
-    (match out_path with
-    | Some out_path -> CCIO.File.write_exn out_path code
-    | None -> print_endline code)
-  | `OCaml -> print_endline "OCaml code generation not implemented"
+  let codegen =
+    match lang with
+    | `Rust -> Imandra_ast_cg_rust.codegen
+    | `OCaml -> Imandra_ast_cg_ocaml.codegen
+  in
+  let code = codegen decls in
+  match out_path with
+  | Some out_path -> CCIO.File.write_exn out_path code
+  | None -> print_endline code
 
 open Cmdliner
 

@@ -1,0 +1,7 @@
+
+(library
+  (name imandra_ast_cg_ocaml)
+  (public_name imandra-ast.cg-ocaml)
+  (synopsis "OCaml codegen for imandra-ast")
+  (flags :standard -open Imandra_ast)
+  (libraries containers imandra-ast))
