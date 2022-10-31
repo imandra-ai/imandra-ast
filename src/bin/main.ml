@@ -7,9 +7,12 @@ let main lang in_paths out_path =
     CCList.flat_map
       (fun f ->
         let l =
-          try Yojson.Safe.from_file f
-          with e ->
-            Fmt.eprintf "could not read %S@." f;
+          try Yojson.Safe.from_file f with
+          | Sys_error msg ->
+            Fmt.eprintf "%s@." msg;
+            exit 1
+          | Yojson.Json_error msg ->
+            Fmt.eprintf "JSON error: %s@." msg;
             exit 1
         in
 
