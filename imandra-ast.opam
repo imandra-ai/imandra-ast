@@ -9,6 +9,7 @@ bug-reports: "https://github.com/imandra-ai/imandra-ast/issues"
 depends: [
   "dune" {>= "2.0"}
   "yojson" {>= "1.6"}
+  "cmdliner"
   "ppx_deriving"
   "ppx_deriving_yojson"
   "zarith" {>= "1.12"}
