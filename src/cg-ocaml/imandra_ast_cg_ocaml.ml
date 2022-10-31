@@ -22,11 +22,9 @@ type kind =
   | K_ty
   | K_var
 
-let prelude =
-  {rust|
-use num_bigint::{BigInt as BigInt, Zero, One, Add};
-use num_rational::BigRational as Real;
-|rust}
+let prelude = {ocaml|
+(* stuff *)
+|ocaml}
 
 (* generate unique name from [base] and counter *)
 let gensym (self : state) (base : string) : string =
@@ -49,10 +47,10 @@ let gensym (self : state) (base : string) : string =
   in
   loop 0
 
-(** find or create rust symbol for this ID *)
+(** find or create OCaml symbol for this ID *)
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid.Tbl.get_or_add self.uids ~k:id ~f:(fun id ->
-      (* FIXME: escape rust keywords *)
+      (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
       let mod_name, base_name = Util.split_path name in
       let base =
@@ -64,20 +62,15 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
             | _, "t" -> mod_name
             | _ -> mod_name @ [ base_name ]
           in
-          String.concat "" @@ List.map String.capitalize_ascii l
+          String.concat "" l
         | K_cstor -> String.capitalize_ascii base_name
         | K_ty_var ->
           (* remove the "'" *)
           String.capitalize_ascii (String.sub name 1 (String.length name - 1))
         | K_field -> String.uncapitalize_ascii base_name
-        | K_var | K_fun -> String.uncapitalize_ascii name
+        | K_var -> String.uncapitalize_ascii name
+        | K_fun -> String.uncapitalize_ascii name
       in
-
-      (*
-      Fmt.printf "base for %a is %S (mod=%a, base=%S)@." Uid.pp id base
-        Fmt.Dump.(list string)
-        mod_name base_name;
-      *)
       let s = gensym self base in
       Str_tbl.add self.seen s ();
       Uid.Tbl.add self.uids id s;
@@ -91,14 +84,7 @@ let str_of_cg (self : state) (cg : state -> Buffer.t -> 'a -> unit) (x : 'a) :
 
 let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
   (* put a box around the type, if it's a clique element *)
-  let maybe_box ty k =
-    match Type.view ty with
-    | Type.Constr (c, _) when CCList.mem ~eq:Uid.equal c clique ->
-      bpf out "Box<";
-      k ();
-      bpf out ">"
-    | _ -> k ()
-  in
+  let maybe_box _ k = k () in
 
   let rec recurse out ty =
     match Type.view ty with
@@ -128,8 +114,8 @@ let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
       let@ () = maybe_box ty in
       let repr =
         match Uid.name c with
-        | "int" -> "BigInt"
-        | "real" -> "Real"
+        | "int" -> "Z.t"
+        | "real" -> "Q.t"
         | _name -> str_of_id self c K_ty
       in
 
@@ -151,37 +137,37 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
     match ty_def.params with
     | [] -> ""
     | l ->
-      spf "<%s>" @@ String.concat ","
+      spf "(%s)" @@ String.concat ","
       @@ List.map (fun tyv -> str_of_id self tyv K_ty_var) l
   in
 
   (match ty_def.decl with
   | Type.Record rows ->
-    bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n";
-    bpf out "pub struct %s%s {\n" name args;
+    (* bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n"; *)
+    bpf out "type %s%s = {\n" name args;
     List.iter
       (fun { Type.f; ty } ->
-        bpf out "  pub %s: %a,\n" (str_of_id self f K_field)
-          (cg_ty ~clique self) ty)
+        bpf out "  %s: %a;\n" (str_of_id self f K_field) (cg_ty ~clique self) ty)
       rows;
 
     bpf out "}"
   | Type.Algebraic cstors ->
-    bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n";
-    bpf out "pub enum %s%s {\n" name args;
+    (* bpf out "#[derive(Eq,PartialEq,Clone,Debug)]\n"; *)
+    bpf out "type %s%s = \n" name args;
     List.iter
       (fun { Type.c; args; labels } ->
-        bpf out "  %s" (str_of_id self c K_cstor);
+        bpf out "  | %s of " (str_of_id self c K_cstor);
         (match (args, labels) with
         | [], _ -> ()
         | _, None ->
-          bpf out "(";
+          let n_args = List.length args in
+          if n_args > 1 then bpf out "(";
           List.iteri
             (fun i a ->
-              if i > 0 then bpf out ",";
+              if i > 0 then bpf out " * ";
               cg_ty ~clique self out a)
             args;
-          bpf out ")"
+          if n_args > 1 then bpf out ")"
         | _, Some lbls ->
           assert (List.length lbls = List.length args);
           Uid.Tbl.add self.cstor_labels c lbls;
@@ -191,20 +177,17 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
               bpf out "%s: %a,"
                 (str_of_id self lbl K_field)
                 (cg_ty ~clique self) a)
-            lbls args;
-          bpf out "}");
-        bpf out ",\n")
-      cstors;
-    bpf out "}"
+            lbls args);
+        bpf out "\n")
+      cstors
   | Type.Builtin _ -> assert false (* TODO *)
   | Type.Alias { target } ->
-    bpf out "pub type %s%s = " name args;
+    bpf out "type %s%s = " name args;
     cg_ty ~clique self out target
-  | Type.Other | Type.Skolem -> bpf out "// (other)\npub struct %s%s;" name args);
+  | Type.Other | Type.Skolem -> bpf out "(* (other) *)\ntype %s%s;" name args);
   bpf out "\n\n"
 
 let cg_fun (self : state) (out : Buffer.t) (f : Term.fun_decl) : unit =
-  bpf self.out "// skip: fun %s\n" (str_of_id self f.name K_fun);
   () (* TODO *)
 
 let cg_decl (self : state) (d : Decl.t) : unit =
@@ -213,9 +196,7 @@ let cg_decl (self : state) (d : Decl.t) : unit =
     let clique = List.map (fun d -> d.Type.name) defs in
     List.iter (cg_ty_decl self ~clique self.out) defs
   | Decl.Fun { recursive = _; fs } -> List.iter (cg_fun self self.out) fs
-  | Decl.Module_alias (name, _) | Decl.Module { name; _ } ->
-    bpf self.out "// skip: module %s\n" (Uid.name name);
-    () (* TODO *)
+  | Decl.Module_alias (name, _) | Decl.Module { name; _ } -> () (* TODO *)
 
 let codegen (decls : Decl.t list) : string =
   let ty_defs = Decl.ty_defs_of_decls decls in
@@ -229,6 +210,6 @@ let codegen (decls : Decl.t list) : string =
       gen = 1;
     }
   in
-  bpf st.out "// generated from imandra-ast\n%s\n" prelude;
+  bpf st.out "(* generated from imandra-ast *)\n%s\n" prelude;
   List.iter (cg_decl st) decls;
   Buffer.contents st.out
