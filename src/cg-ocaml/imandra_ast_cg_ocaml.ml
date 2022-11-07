@@ -151,14 +151,11 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
         (match (args, labels) with
         | [], _ -> ()
         | _, None ->
-          let n_args = List.length args in
-          if n_args > 1 then bpf out "(";
           List.iteri
             (fun i a ->
               if i > 0 then bpf out " * ";
               cg_ty ~clique self out a)
-            args;
-          if n_args > 1 then bpf out ")"
+            args
         | _, Some lbls ->
           assert (List.length lbls = List.length args);
           Uid.Tbl.add self.cstor_labels c lbls;

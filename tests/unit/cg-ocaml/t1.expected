@@ -10,7 +10,7 @@ type complex = {
 }
 
 type point = 
-  | Polar of (Z.t * Z.t)
+  | Polar of Z.t * Z.t
   | Cartesian of complex
 
 
