@@ -321,10 +321,11 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
     bpf out "type %s%s = \n" name args;
     List.iter
       (fun { Type.c; args; labels } ->
-        bpf out "  | %s of " (str_of_id self c K_cstor);
+        bpf out "  | %s" (str_of_id self c K_cstor);
         (match (args, labels) with
         | [], _ -> ()
         | _, None ->
+          bpf out " of ";
           List.iteri
             (fun i a ->
               if i > 0 then bpf out " * ";
@@ -332,6 +333,7 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
             args
         | _, Some lbls ->
           assert (List.length lbls = List.length args);
+          bpf out " of ";
           Uid.Tbl.add self.cstor_labels c lbls;
           bpf out "{\n";
           List.iter2
