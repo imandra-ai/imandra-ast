@@ -23,7 +23,7 @@ type kind =
   | K_var
 
 let prelude = {ocaml|
-(* stuff *)
+open Imandra_prelude;;
 |ocaml}
 
 (* generate unique name from [base] and counter *)
@@ -83,35 +83,23 @@ let str_of_cg (self : state) (cg : state -> Buffer.t -> 'a -> unit) (x : 'a) :
   Buffer.contents buf
 
 let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
-  (* put a box around the type, if it's a clique element *)
-  let maybe_box _ k = k () in
-
   let rec recurse out ty =
     match Type.view ty with
     | Type.Var v ->
       let str = str_of_id self v K_var in
       bpf out "%s" str
-    | Type.Arrow (_, _, _) ->
-      let args, ret = Type.in_out_types self.ty_defs ty in
-      bpf out "(fn(";
-      List.iteri
-        (fun i a ->
-          if i > 0 then bpf out ",";
-          recurse out a)
-        args;
-      bpf out ") -> ";
-      recurse out ret;
-      bpf out ")"
+    | Type.Arrow (lbl, a, b) ->
+      if lbl <> "" then bpf out "%s:" lbl;
+      bpf out "(%a -> %a)" recurse a recurse b
     | Type.Tuple l ->
-      bpf out "(fn(";
+      bpf out "(";
       List.iteri
         (fun i a ->
-          if i > 0 then bpf out ",";
+          if i > 0 then bpf out "*";
           recurse out a)
         l;
       bpf out ")"
     | Type.Constr (c, []) ->
-      let@ () = maybe_box ty in
       let repr =
         match Uid.name c with
         | "int" -> "Z.t"
@@ -121,10 +109,13 @@ let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
 
       bpf out "%s" repr
     | Type.Constr (c, args) ->
-      let@ () = maybe_box ty in
-      bpf out "%s<" (str_of_id self c K_ty);
-      List.iter (fun a -> bpf out "%a," recurse a) args;
-      bpf out ">"
+      bpf out "(";
+      List.iteri
+        (fun i a ->
+          if i > 0 then bpf out ",";
+          recurse out a)
+        args;
+      bpf out ") %s" (str_of_id self c K_ty)
   in
 
   let ty = Type.chase_deep self.ty_defs ty in
