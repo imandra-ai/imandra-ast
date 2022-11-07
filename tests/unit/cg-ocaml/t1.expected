@@ -1,0 +1,18 @@
+ocaml code:
+```
+(* generated from imandra-ast *)
+
+open Imandra_prelude;;
+
+type complex = {
+  re: Z.t;
+  im: Z.t;
+}
+
+type point = 
+  | Polar of (Z.t * Z.t)
+  | Cartesian of complex
+
+
+
+```
