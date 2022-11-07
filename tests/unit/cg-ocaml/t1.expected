@@ -14,5 +14,15 @@ type point =
   | Cartesian of complex
 
 
+let c_plus = (fun c1 ->
+ (fun c2 ->
+ {re=( c1.re +  c2.re); im=( c1.im +  c2.im)}))
+
+let is_cartesian = (fun _x ->
+ (match _x with
+| Polar(_,_) -> false
+| Cartesian(_) -> true
+))
+
 
 ```
