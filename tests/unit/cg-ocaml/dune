@@ -1,5 +1,19 @@
 
 
-(tests
-  (names t1)
+(test
+  (name t1)
+  (modules t1)
+  (deps t1.json)
   (libraries containers yojson imandra-ast imandra-ast.cg-ocaml))
+
+(rule
+  (targets t1_ml.ml)
+  (deps (:file t1.json))
+  (action (run ../../../src/bin/main.exe %{file} --lang=ocaml -o %{targets})))
+
+; mostly, test that this compiles *)
+(test
+  (name t1_ml)
+  (modules t1_ml test_t1_ml)
+  (libraries containers imandra-prelude))
+
