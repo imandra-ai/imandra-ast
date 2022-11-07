@@ -46,10 +46,11 @@ let split_path s =
   in
   aux s (String.length s - 1)
 
-let join_path (x, y) =
+let join_path x y =
   if x = [] then
     y
   else
     String.concat "." x ^ "." ^ y
 
 let chop_path s = snd @@ split_path s
+let is_qualified s = fst @@ split_path s <> []

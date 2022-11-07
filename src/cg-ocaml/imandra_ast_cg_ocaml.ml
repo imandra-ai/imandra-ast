@@ -64,13 +64,17 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
             | _ -> mod_name @ [ base_name ]
           in
           String.concat "" l
-        | K_mod | K_cstor -> String.capitalize_ascii base_name
+        | K_mod | K_cstor ->
+          Util.join_path mod_name (String.capitalize_ascii base_name)
         | K_ty_var ->
           (* remove the "'" *)
           String.capitalize_ascii (String.sub name 1 (String.length name - 1))
-        | K_field -> String.uncapitalize_ascii base_name
-        | K_var -> String.uncapitalize_ascii name
-        | K_fun -> String.uncapitalize_ascii name
+        | K_field ->
+          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+        | K_var ->
+          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+        | K_fun ->
+          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
       in
       let s = gensym self base in
       Str_tbl.add self.seen s ();
@@ -183,8 +187,9 @@ let str_of_apply_arg = function
   | Term.Optional s -> spf "?%s" s
 
 let is_infix s =
-  s <> ""
-  &&
+  let s = Util.chop_path s in
+  s = ""
+  ||
   match s.[0] with
   | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
   | _ -> true
@@ -209,13 +214,23 @@ let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
       bpf out "in\n%a" recurse bod
     | Term.Apply (_, f, []) -> recurse out f
     | Term.Apply (_, { Term.view = Term.Ident f; _ }, [ a; b ])
-      when is_infix (Uid.name f.id) ->
+      when is_infix (Uid.name f.id) && not (Util.is_qualified (Uid.name f.id))
+      ->
       bpf out "(%a %s %a)" recurse_arg a (Uid.name f.id) recurse_arg b
     | Term.Apply (_, f, args) ->
       bpf out "(%a" recurse f;
       List.iter (fun a -> bpf out " %a" recurse_arg a) args;
       bpf out ")"
-    | Term.Ident x -> bpf out "%s" (str_of_id self x.id K_var)
+    | Term.Ident x ->
+      let s = str_of_id self x.id K_var in
+      (* make sure to protect partially applied infix symbols and the likes *)
+      let s =
+        if is_infix s then
+          spf "(%s)" s
+        else
+          s
+      in
+      bpf out "%s" s
     | Term.Tuple (_, l) ->
       bpf out "(";
       List.iteri
