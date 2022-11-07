@@ -225,9 +225,12 @@ let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
       let s = str_of_id self x.id K_var in
       (* make sure to protect partially applied infix symbols and the likes *)
       let s =
-        if is_infix s then
-          spf "(%s)" s
-        else
+        if is_infix s then (
+          match s with
+          | "Option.>>=" -> "Option.( >>= )"
+          | "Option.>|=" -> "Option.( >|= )"
+          | _ -> spf "(%s)" s
+        ) else
           s
       in
       bpf out "%s" s
