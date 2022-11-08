@@ -186,13 +186,14 @@ let str_of_apply_arg = function
   | Term.Label s -> spf "~%s" s
   | Term.Optional s -> spf "?%s" s
 
-let is_infix s =
-  let s = Util.chop_path s in
-  s = ""
-  ||
+let is_base_infix s =
   match s.[0] with
   | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
   | _ -> true
+
+let is_infix s =
+  let base = Util.chop_path s in
+  base = "" || is_base_infix base
 
 let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
   let rec recurse out (t : Term.t) : unit =
@@ -224,12 +225,12 @@ let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
     | Term.Ident x ->
       let s = str_of_id self x.id K_var in
       (* make sure to protect partially applied infix symbols and the likes *)
+      let components, base = Util.split_path s in
       let s =
-        if is_infix s then (
-          match s with
-          | "Option.>>=" -> "Option.( >>= )"
-          | "Option.>|=" -> "Option.( >|= )"
-          | _ -> spf "(%s)" s
+        if is_base_infix base then (
+          (* enclose an infix function base with parens *)
+          let base = spf "( %s )" base in
+          Util.join_path components base
         ) else
           s
       in
