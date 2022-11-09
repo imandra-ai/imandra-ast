@@ -23,8 +23,26 @@ type kind =
   | K_var
   | K_mod
 
-let prelude = {ocaml|
+let prelude =
+  {ocaml|
 open Imandra_prelude;;
+
+module DJ_Z = struct
+  type t = Z.t
+  let to_yojson t = `Int (Z.to_int t)
+  let of_yojson = function
+    | `Int i -> Ok (Z.of_int i)
+    | _ -> Error "DJ_Z.of_yojson"
+end
+
+module DJ_Q = struct
+  type t = Q.t
+  let to_yojson t = `Float (Q.to_float t)
+  let of_yojson = function
+    | `Float f -> Ok (Q.of_float f)
+    | _ -> Error "DJ_Q.of_yojson"
+end
+
 |ocaml}
 
 (* generate unique name from [base] and counter *)
@@ -106,9 +124,11 @@ let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
       bpf out ")"
     | Type.Constr (c, []) ->
       let repr =
+        (* use deriving-yojson module wrappers to support
+           serialization of these [int] and [real] *)
         match Uid.name c with
-        | "int" -> "Z.t"
-        | "real" -> "Q.t"
+        | "int" -> "DJ_Z.t"
+        | "real" -> "DJ_Q.t"
         | _name -> str_of_id self c K_ty
       in
 
@@ -353,7 +373,7 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
     bpf out "type %s%s = " name args;
     cg_ty ~clique self out target
   | Type.Other | Type.Skolem -> bpf out "(* (other) *)\ntype %s%s;" name args);
-  bpf out "\n\n"
+  bpf out "[@@deriving yojson]\n\n"
 
 let cg_fun (self : state) ~sep (out : Buffer.t) (f : Term.fun_decl) : unit =
   bpf out "%s %a = %a\n" sep (cg_pat self) f.pat (cg_term self) f.body
