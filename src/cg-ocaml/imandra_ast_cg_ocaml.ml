@@ -274,13 +274,13 @@ let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
     | Term.Construct { c; args = []; _ } ->
       bpf out "%s" (str_of_id self c K_cstor)
     | Term.Construct { c; args; lbls = None; _ } ->
-      bpf out "%s(" (str_of_id self c K_cstor);
+      bpf out "(%s(" (str_of_id self c K_cstor);
       List.iteri
         (fun i x ->
           if i > 0 then bpf out ", ";
           recurse out x)
         args;
-      bpf out ")"
+      bpf out "))"
     | Term.Construct { c; args; lbls = Some lbls; _ } -> assert false (* TODO *)
     | Term.Record (_, rows, rest) ->
       (match rest with
