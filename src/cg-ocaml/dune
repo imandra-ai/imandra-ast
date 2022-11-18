@@ -2,6 +2,18 @@
 (library
   (name imandra_ast_cg_ocaml)
   (public_name imandra-ast.cg-ocaml)
+  (modules :standard \ prelude)
   (synopsis "OCaml codegen for imandra-ast")
   (flags :standard -open Imandra_ast)
   (libraries containers imandra-ast))
+
+(rule
+  (targets prelude_code.ml)
+  (deps (:file prelude.ml))
+  (action
+    (with-stdout-to
+      %{targets}
+      (progn
+        (echo "let code = {ocaml|")
+        (cat %{file})
+        (echo "|ocaml}")))))
