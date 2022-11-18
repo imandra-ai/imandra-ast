@@ -2,11 +2,11 @@ module Str_tbl = CCHashtbl.Make (CCString)
 module Fmt = CCFormat
 
 let spf = Printf.sprintf
-let bpf = Printf.bprintf
+let fpf = Fmt.fprintf
 let[@inline] ( let@ ) f x = f x
 
 type state = {
-  out: Buffer.t;
+  code: Buffer.t;
   ty_defs: Type.Defs.t;
   cstor_labels: Uid.t list Uid.Tbl.t; (* cstor -> its labels *)
   uids: string Uid.Tbl.t;
@@ -99,29 +99,42 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
       Uid.Tbl.add self.uids id s;
       s)
 
+(** Allocate local formatter, add the content to the code buffer *)
+let with_local_fmt (self : state) (f : Fmt.t -> unit) : unit =
+  let buf = Buffer.create 32 in
+  let out = Format.formatter_of_buffer buf in
+  Fmt.fprintf out "@[<2>";
+  let@ () =
+    Fun.protect ~finally:(fun () ->
+        Fmt.fprintf out "@]@.";
+        Buffer.add_buffer self.code buf)
+  in
+  f out
+
 let str_of_cg (self : state) (cg : state -> Buffer.t -> 'a -> unit) (x : 'a) :
     string =
   let buf = Buffer.create 32 in
   cg self buf x;
   Buffer.contents buf
 
-let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
+(** Emit type *)
+let cg_ty ?(clique = []) (self : state) (out : Fmt.t) (ty : Type.t) : unit =
   let rec recurse out ty =
     match Type.view ty with
     | Type.Var v ->
       let str = str_of_id self v K_var in
-      bpf out "%s" str
+      fpf out "%s" str
     | Type.Arrow (lbl, a, b) ->
-      if lbl <> "" then bpf out "%s:" lbl;
-      bpf out "(%a -> %a)" recurse a recurse b
+      if lbl <> "" then fpf out "%s:" lbl;
+      fpf out "(@[%a ->@ %a@])" recurse a recurse b
     | Type.Tuple l ->
-      bpf out "(";
+      fpf out "(@[";
       List.iteri
         (fun i a ->
-          if i > 0 then bpf out "*";
+          if i > 0 then fpf out " *@ ";
           recurse out a)
         l;
-      bpf out ")"
+      fpf out "@])"
     | Type.Constr (c, []) ->
       let repr =
         (* use deriving-yojson module wrappers to support
@@ -132,72 +145,72 @@ let cg_ty ?(clique = []) (self : state) (out : Buffer.t) (ty : Type.t) : unit =
         | _name -> str_of_id self c K_ty
       in
 
-      bpf out "%s" repr
+      fpf out "%s" repr
     | Type.Constr (c, args) ->
-      bpf out "(";
+      fpf out "(@[";
       List.iteri
         (fun i a ->
-          if i > 0 then bpf out ",";
+          if i > 0 then fpf out ",@ ";
           recurse out a)
         args;
-      bpf out ") %s" (str_of_id self c K_ty)
+      fpf out "@]) %s" (str_of_id self c K_ty)
   in
 
   let ty = Type.chase_deep self.ty_defs ty in
   recurse out ty
 
-let cg_const (out : Buffer.t) (c : Term.const) : unit =
+let cg_const (out : Fmt.t) (c : Term.const) : unit =
   match c with
-  | Term.Const_nativeint n -> bpf out "%ndn" n
-  | Term.Const_int32 n -> bpf out "%ldl" n
-  | Term.Const_int64 n -> bpf out "%LdL" n
-  | Term.Const_float f -> bpf out "%h" f
-  | Term.Const_char c -> bpf out "%C" c
-  | Term.Const_string s -> bpf out "%S" s
-  | Term.Const_z s -> bpf out "(Z.of_string %S)" (Z.to_string s)
-  | Term.Const_q q -> bpf out "(Q.of_string %S)" (Q.to_string q)
+  | Term.Const_nativeint n -> fpf out "%ndn" n
+  | Term.Const_int32 n -> fpf out "%ldl" n
+  | Term.Const_int64 n -> fpf out "%LdL" n
+  | Term.Const_float f -> fpf out "%h" f
+  | Term.Const_char c -> fpf out "%C" c
+  | Term.Const_string s -> fpf out "%S" s
+  | Term.Const_z s -> fpf out "(Z.of_string %S)" (Z.to_string s)
+  | Term.Const_q q -> fpf out "(Q.of_string %S)" (Q.to_string q)
   | Term.Const_real_approx _s ->
-    bpf out "assert false (* TODO: real approx %s *)" _s
+    fpf out "assert false (* TODO: real approx %s *)" _s
 
-let cg_pat (self : state) (out : Buffer.t) (p : Term.pattern) : unit =
+let cg_pat (self : state) (out : Fmt.t) (p : Term.pattern) : unit =
   let rec recurse out (p : Term.pattern) : unit =
     match p.view with
-    | Term.P_var v -> bpf out "%s" (str_of_id self v.id K_var)
+    | Term.P_var v -> fpf out "%s" (str_of_id self v.id K_var)
     | Term.P_tuple (_, l) ->
-      bpf out "(";
+      fpf out "(@[";
       List.iteri
         (fun i x ->
-          if i > 0 then bpf out ",";
+          if i > 0 then fpf out ",@ ";
           recurse out x)
         l;
-      bpf out ")"
-    | Term.P_any _ -> bpf out "_"
-    | Term.P_true -> bpf out "true"
-    | Term.P_false -> bpf out "false"
+      fpf out "@])"
+    | Term.P_any _ -> fpf out "_"
+    | Term.P_true -> fpf out "true"
+    | Term.P_false -> fpf out "false"
     | Term.P_const (c, _) -> cg_const out c
-    | Term.P_or (a, b) -> bpf out "(%a | %a)" recurse a recurse b
+    | Term.P_or (a, b) -> fpf out "(@[<hv>%a@ | %a@])" recurse a recurse b
     | Term.P_construct { c; args = []; _ } ->
-      bpf out "%s" (str_of_id self c K_cstor)
+      fpf out "%s" (str_of_id self c K_cstor)
     | Term.P_construct { c; args; lbls = None; _ } ->
-      bpf out "%s(" (str_of_id self c K_cstor);
+      fpf out "%s(@[" (str_of_id self c K_cstor);
       List.iteri
         (fun i ty ->
-          if i > 0 then bpf out ",";
+          if i > 0 then fpf out ",@ ";
           recurse out ty)
         args;
-      bpf out ")"
+      fpf out "@])"
     | Term.P_construct { c; args; lbls = Some lbls; _ } ->
       assert false (* TODO *)
     | Term.P_record (_, rows) ->
-      bpf out "{";
+      fpf out "{@[";
       List.iteri
         (fun i (f, p) ->
-          if i > 0 then bpf out ";";
-          bpf out "%s: %a" (str_of_id self f K_field) recurse p)
+          if i > 0 then fpf out ";@ ";
+          fpf out "@[<1>%s:@ %a@]" (str_of_id self f K_field) recurse p)
         rows;
-      bpf out "}"
+      fpf out "@]}"
     | Term.P_alias (v, p) ->
-      bpf out "(%a as %s)" recurse p (str_of_id self v.id K_var)
+      fpf out "(@[<1>%a@ as %s@])" recurse p (str_of_id self v.id K_var)
   in
   recurse out p
 
@@ -215,33 +228,33 @@ let is_infix s =
   let base = Util.chop_path s in
   base = "" || is_base_infix base
 
-let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
+let rec cg_term (self : state) (out : Fmt.t) (t : Term.t) : unit =
   let rec recurse out (t : Term.t) : unit =
     match Term.view t with
     | Term.Const (c, _) -> cg_const out c
     | Term.If (a, b, c) ->
-      bpf out "(if %a\n then %a\n else %a)" recurse a recurse b recurse c
+      fpf out "(@[if %a@ then@ %a@ else %a@])" recurse a recurse b recurse c
     | Term.Let (rec_, bs, bod) ->
-      bpf out "let%s "
+      fpf out "@[@[<hv>let%s "
         (if rec_ = Term.Recursive then
           " rec"
         else
           "");
       List.iteri
         (fun i ((x : Var.t), t) ->
-          if i > 0 then bpf out " and ";
-          bpf out "%s = %a\n" (str_of_id self x.id K_var) recurse t)
+          if i > 0 then fpf out "@ and ";
+          fpf out "@[<1>%s =@ %a@]" (str_of_id self x.id K_var) recurse t)
         bs;
-      bpf out "in\n%a" recurse bod
+      fpf out "@] in@ %a@]" recurse bod
     | Term.Apply (_, f, []) -> recurse out f
     | Term.Apply (_, { Term.view = Term.Ident f; _ }, [ a; b ])
       when is_infix (Uid.name f.id) && not (Util.is_qualified (Uid.name f.id))
       ->
-      bpf out "(%a %s %a)" recurse_arg a (Uid.name f.id) recurse_arg b
+      fpf out "(@[%a %s@ %a@])" recurse_arg a (Uid.name f.id) recurse_arg b
     | Term.Apply (_, f, args) ->
-      bpf out "(%a" recurse f;
-      List.iter (fun a -> bpf out " %a" recurse_arg a) args;
-      bpf out ")"
+      fpf out "(@[%a" recurse f;
+      List.iter (fun a -> fpf out "@ %a" recurse_arg a) args;
+      fpf out "@])"
     | Term.Ident x ->
       let s = str_of_id self x.id K_var in
       (* make sure to protect partially applied infix symbols and the likes *)
@@ -254,75 +267,74 @@ let rec cg_term (self : state) (out : Buffer.t) (t : Term.t) : unit =
         ) else
           s
       in
-      bpf out "%s" s
+      fpf out "%s" s
     | Term.Tuple (_, l) ->
-      bpf out "(";
+      fpf out "(@[";
       List.iteri
         (fun i x ->
-          if i > 0 then bpf out ", ";
+          if i > 0 then fpf out ",@ ";
           recurse out x)
         l;
-      bpf out ")"
-    | Term.True -> bpf out "true"
-    | Term.False -> bpf out "false"
+      fpf out "@])"
+    | Term.True -> fpf out "true"
+    | Term.False -> fpf out "false"
     | Term.Fun (_, lbl, x, bod) ->
-      bpf out "(fun %s%s ->\n %a)" (str_of_apply_arg lbl)
+      fpf out "(@[fun %s%s ->@ %a@])" (str_of_apply_arg lbl)
         (str_of_id self x.id K_var)
         recurse bod
     | Term.Field { f; t; _ } ->
-      bpf out "%a.%s" recurse t (str_of_id self f K_field)
+      fpf out "%a.%s" recurse t (str_of_id self f K_field)
     | Term.Construct { c; args = []; _ } ->
-      bpf out "%s" (str_of_id self c K_cstor)
+      fpf out "%s" (str_of_id self c K_cstor)
     | Term.Construct { c; args; lbls = None; _ } ->
-      bpf out "(%s(" (str_of_id self c K_cstor);
+      fpf out "(@[<2>%s(" (str_of_id self c K_cstor);
       List.iteri
         (fun i x ->
-          if i > 0 then bpf out ", ";
+          if i > 0 then fpf out ",@ ";
           recurse out x)
         args;
-      bpf out "))"
+      fpf out ")@])"
     | Term.Construct { c; args; lbls = Some lbls; _ } -> assert false (* TODO *)
     | Term.Record (_, rows, rest) ->
       (match rest with
-      | None -> bpf out "{"
-      | Some r -> bpf out "{(%a) with " recurse r);
+      | None -> fpf out "@[{"
+      | Some r -> fpf out "{@[(%a) with@ " recurse r);
       List.iteri
         (fun i (f, x) ->
-          if i > 0 then bpf out "; ";
-          bpf out "%s=%a" (str_of_id self f K_field) recurse x)
+          if i > 0 then fpf out ";@ ";
+          fpf out "@[<1>%s =@ %a@]" (str_of_id self f K_field) recurse x)
         rows;
-      bpf out "}"
-    | Term.As (t, ty) -> bpf out "(%a : %a)" recurse t (cg_ty self) ty
+      fpf out "@]}"
+    | Term.As (t, ty) -> fpf out "(@[%a : %a@])" recurse t (cg_ty self) ty
     | Term.Match { lhs; bs; _ } ->
-      bpf out "(match %a with\n" recurse lhs;
-      List.iter (fun vb -> bpf out "| %a\n" (cg_vb self) vb) bs;
-      bpf out ")"
+      fpf out "(@[<hv>match %a with" recurse lhs;
+      List.iter (fun vb -> fpf out "@ @[| %a@]" (cg_vb self) vb) bs;
+      fpf out "@])"
     | Term.Let_match { flg; bs; body; _ } ->
-      bpf out "let%s "
+      fpf out "@[@[<hv>let%s "
         (match flg with
         | Term.Recursive -> " rec"
         | _ -> "");
       List.iteri
         (fun i vb ->
-          if i > 0 then bpf out "\n and ";
-          bpf out "%a" (cg_vb self) vb)
+          if i > 0 then fpf out "@ and ";
+          fpf out "%a" (cg_vb self) vb)
         bs;
-      bpf out "in %a" recurse body
+      fpf out "@] in@ %a@]" recurse body
   and recurse_arg out (arg, a) =
     let s = str_of_apply_arg arg in
-    bpf out " %s%a" s recurse a
+    fpf out " %s%a" s recurse a
   in
 
   recurse out t
 
 and cg_vb (self : state) out (vb : Term.t Term.vb) : unit =
   let { Term.pat; when_; expr } = vb in
-  bpf out "%a" (cg_pat self) pat;
-  Option.iter (fun e -> bpf out " when %a" (cg_term self) e) when_;
-  bpf out " -> %a" (cg_term self) expr
+  fpf out "@[<1>@[<2>%a" (cg_pat self) pat;
+  Option.iter (fun e -> fpf out "@ when %a@]" (cg_term self) e) when_;
+  fpf out " ->@ %a@]" (cg_term self) expr
 
-let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
-    unit =
+let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
   let name = str_of_id self ty_def.name K_ty in
   let args =
     match ty_def.params with
@@ -334,56 +346,61 @@ let cg_ty_decl (self : state) ~clique (out : Buffer.t) (ty_def : Type.def) :
 
   (match ty_def.decl with
   | Type.Record rows ->
-    bpf out "type %s%s = {\n" name args;
+    fpf out "@[<hv2>type %s%s = {@ " name args;
     List.iter
       (fun { Type.f; ty } ->
-        bpf out "  %s: %a;\n" (str_of_id self f K_field) (cg_ty ~clique self) ty)
+        fpf out "@[<1>%s:@ %a@];@ " (str_of_id self f K_field)
+          (cg_ty ~clique self) ty)
       rows;
 
-    bpf out "}"
+    fpf out "@]}"
   | Type.Algebraic cstors ->
-    bpf out "type %s%s = \n" name args;
+    fpf out "@[<hv2>type %s%s =@ " name args;
     List.iter
       (fun { Type.c; args; labels } ->
-        bpf out "  | %s" (str_of_id self c K_cstor);
+        fpf out "@[| %s" (str_of_id self c K_cstor);
         (match (args, labels) with
         | [], _ -> ()
         | _, None ->
-          bpf out " of ";
+          fpf out " of ";
           List.iteri
             (fun i a ->
-              if i > 0 then bpf out " * ";
+              if i > 0 then fpf out "@ * ";
               cg_ty ~clique self out a)
             args
         | _, Some lbls ->
           assert (List.length lbls = List.length args);
-          bpf out " of ";
+          fpf out " of ";
           Uid.Tbl.add self.cstor_labels c lbls;
-          bpf out "{\n";
+          fpf out "{@[";
           List.iter2
             (fun lbl a ->
-              bpf out "%s: %a,"
+              fpf out "@[<1>%s:@ %a@};@ "
                 (str_of_id self lbl K_field)
                 (cg_ty ~clique self) a)
-            lbls args);
-        bpf out "\n")
+            lbls args;
+          fpf out "@]}");
+        fpf out "@]@ ")
       cstors
   | Type.Builtin _ -> assert false (* TODO *)
   | Type.Alias { target } ->
-    bpf out "type %s%s = " name args;
-    cg_ty ~clique self out target
-  | Type.Other | Type.Skolem -> bpf out "(* (other) *)\ntype %s%s;" name args);
-  bpf out "[@@deriving yojson]\n\n"
+    fpf out "@[<2>type %s%s =@ " name args;
+    cg_ty ~clique self out target;
+    fpf out "@]"
+  | Type.Other | Type.Skolem ->
+    fpf out "@[<v>(* (other) *)@ @[type %s%s@]@]" name args);
+  fpf out "%s" "[@@deriving yojson]"
 
-let cg_fun (self : state) ~sep (out : Buffer.t) (f : Term.fun_decl) : unit =
-  bpf out "%s %a = %a\n" sep (cg_pat self) f.pat (cg_term self) f.body
+let cg_fun (self : state) ~sep (out : Fmt.t) (f : Term.fun_decl) : unit =
+  fpf out "@[<hv2>%s %a =@ %a@]" sep (cg_pat self) f.pat (cg_term self) f.body
 
-let rec cg_decl (self : state) (d : Decl.t) : unit =
+let rec cg_decl (self : state) (out : Fmt.t) (d : Decl.t) : unit =
   match d.view with
   | Decl.Ty { tys = defs } ->
     let clique = List.map (fun d -> d.Type.name) defs in
-    List.iter (cg_ty_decl self ~clique self.out) defs
+    List.iter (cg_ty_decl self ~clique out) defs
   | Decl.Fun { recursive; fs } ->
+    fpf out "@[<hv>";
     List.iteri
       (fun i f ->
         let sep =
@@ -395,23 +412,23 @@ let rec cg_decl (self : state) (d : Decl.t) : unit =
           else
             "and"
         in
-        cg_fun ~sep self self.out f)
+        cg_fun ~sep self out f)
       fs;
-    bpf self.out "\n"
+    fpf out "@]"
   | Decl.Module_alias (name, m) ->
-    bpf self.out "module %s = %s"
+    fpf out "module %s = %s"
       (str_of_id self name K_mod)
       (str_of_id self m K_mod)
   | Decl.Module { name; items } ->
-    bpf self.out "module %s = struct\n" (str_of_id self name K_mod);
-    List.iter (cg_decl self) items;
-    bpf self.out "end"
+    fpf out "module %s = struct" (str_of_id self name K_mod);
+    List.iter (cg_decl self out) items;
+    fpf out "end"
 
 let codegen (decls : Decl.t list) : string =
   let ty_defs = Decl.ty_defs_of_decls decls in
   let st =
     {
-      out = Buffer.create 64;
+      code = Buffer.create 64;
       seen = Str_tbl.create 8;
       ty_defs;
       cstor_labels = Uid.Tbl.create 16;
@@ -419,6 +436,10 @@ let codegen (decls : Decl.t list) : string =
       gen = 1;
     }
   in
-  bpf st.out "(* generated from imandra-ast *)\n%s\n" prelude;
-  List.iter (cg_decl st) decls;
-  Buffer.contents st.out
+  Printf.bprintf st.code "(* generated from imandra-ast *)\n%s\n" prelude;
+  List.iter
+    (fun d ->
+      let@ out = with_local_fmt st in
+      fpf out "%a@." (cg_decl st) d)
+    decls;
+  Buffer.contents st.code
