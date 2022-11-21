@@ -17,3 +17,8 @@
         (echo "let code = {ocaml|")
         (cat %{file})
         (echo "|ocaml}")))))
+
+(library
+  (name prelude)
+  (modules prelude)
+  (libraries imandra-prelude cbor yojson))

@@ -46,38 +46,39 @@ let gensym (self : state) (base : string) : string =
   in
   loop 0
 
+(* FIXME: escape OCaml keywords *)
+let str_of_id_name (name : string) (kind : kind) : string =
+  let mod_name, base_name = Util.split_path name in
+  let base =
+    match kind with
+    | K_ty ->
+      let l =
+        match (mod_name, base_name) with
+        | [], _ -> [ base_name ]
+        | _, "t" -> mod_name
+        | _ -> mod_name @ [ base_name ]
+      in
+      String.concat "" l
+    | K_mod | K_cstor ->
+      Util.join_path mod_name (String.capitalize_ascii base_name)
+    | K_ty_var ->
+      (* remove the "'" *)
+      String.capitalize_ascii (String.sub name 1 (String.length name - 1))
+    | K_field -> Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+    | K_var -> Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+    | K_fun -> Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+  in
+  base
+
 (** find or create OCaml symbol for this ID *)
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid.Tbl.get_or_add self.uids ~k:id ~f:(fun id ->
-      (* FIXME: escape OCaml keywords *)
-      let name = Uid.name id in
-      let mod_name, base_name = Util.split_path name in
-      let base =
-        match kind with
-        | K_ty ->
-          let l =
-            match (mod_name, base_name) with
-            | [], _ -> [ base_name ]
-            | _, "t" -> mod_name
-            | _ -> mod_name @ [ base_name ]
-          in
-          String.concat "" l
-        | K_mod | K_cstor ->
-          Util.join_path mod_name (String.capitalize_ascii base_name)
-        | K_ty_var ->
-          (* remove the "'" *)
-          String.capitalize_ascii (String.sub name 1 (String.length name - 1))
-        | K_field ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
-        | K_var ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
-        | K_fun ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
-      in
-      let s = gensym self base in
-      Str_tbl.add self.seen s ();
-      Uid.Tbl.add self.uids id s;
-      s)
+      let raw_name = Uid.name id in
+      let base = str_of_id_name raw_name kind in
+      let final_name = gensym self base in
+      Str_tbl.add self.seen final_name ();
+      Uid.Tbl.add self.uids id final_name;
+      final_name)
 
 (** Allocate local formatter, add the content to the code buffer *)
 let with_local_fmt (self : state) (f : Fmt.t -> unit) : unit =
@@ -332,7 +333,6 @@ let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
         fpf out "@[<1>%s:@ %a@];@ " (str_of_id self f K_field)
           (cg_ty ~clique self) ty)
       rows;
-
     fpf out "@]}"
   | Type.Algebraic cstors ->
     fpf out "@[<hv2>type %s%s =@ " name args;
@@ -369,29 +369,226 @@ let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
     fpf out "@]"
   | Type.Other | Type.Skolem ->
     fpf out "@[<v>(* (other) *)@ @[type %s%s@]@]" name args);
-  fpf out "%s" "[@@deriving yojson]"
+  fpf out "%s@." "[@@deriving yojson]"
+
+(** Code to convert [value : ty] into CBOR *)
+let rec cg_to_cbor_ty (self : state) (out : Fmt.t) (ty : Type.t) ~value : unit =
+  match Type.view ty with
+  | Type.Var v -> fpf out "%s_to_cbor" (Uid.name v)
+  | Type.Arrow (lbl, a, b) ->
+    fpf out {|failwith "cannot convert arrow type to cbor"|}
+  | Type.Tuple l ->
+    fpf out "(@[<hv>let (@[";
+    List.iteri
+      (fun i _ ->
+        if i > 0 then fpf out ",@ ";
+        fpf out "x_%d" i)
+      l;
+    fpf out "@]) = %s in@ " value;
+
+    List.iteri
+      (fun i ty ->
+        if i > 0 then fpf out ",@ ";
+        cg_to_cbor_ty self out ty ~value:(spf "x_%d" i))
+      l;
+    fpf out "@])"
+  | Type.Constr (_, _) ->
+    fpf out "assert false (* TODO: to_cbor_ty %a value=%S *)" Type.pp ty value;
+    ()
+
+(** Conversion to CBOR for these type declaration *)
+let cg_to_cbor_ty_decl (self : state) ~sep ~clique (out : Fmt.t)
+    (ty_def : Type.def) : unit =
+  let name =
+    let raw_name = Uid.name ty_def.name in
+    if raw_name = "t" then
+      "to_cbor"
+    else
+      spf "%s_to_cbor" raw_name
+  in
+
+  let args =
+    match ty_def.params with
+    | [] -> ""
+    | l ->
+      spf "%s" @@ String.concat " "
+      @@ List.map
+           (fun tyv -> str_of_id_name (spf "x_%s" @@ Uid.name tyv) K_var)
+           l
+  in
+  fpf out "@[<hv2>%s %s%s self : cbor =@ " sep name args;
+
+  (match ty_def.decl with
+  | Type.Record rows ->
+    fpf out "@[<hv>@[<hv2>`Map [";
+    List.iter
+      (fun { Type.f; ty } ->
+        fpf out "@,(`Text %S, %t);" (str_of_id self f K_field) (fun out ->
+            cg_to_cbor_ty self out ty
+              ~value:(spf "self.%s" (str_of_id self f K_field))))
+      rows;
+    fpf out "]@]@]"
+  | Type.Algebraic cstors ->
+    fpf out "@[<hv>match self with";
+    List.iter
+      (fun { Type.c; args; labels } ->
+        fpf out "@ | @[%s" (str_of_id self c K_cstor);
+        (* print args *)
+        (match (args, labels) with
+        | [], _ -> ()
+        | _, None ->
+          fpf out "(@[";
+          List.iteri
+            (fun i _a ->
+              if i > 0 then fpf out ",@ ";
+              fpf out "x_%d" i)
+            args;
+          fpf out "@])"
+        | _, Some lbls ->
+          assert (List.length lbls = List.length args);
+          fpf out "{@[";
+          List.iteri
+            (fun i lbl -> fpf out "%s=x_%d;@ " (str_of_id self lbl K_field) i)
+            lbls;
+          fpf out "@]}");
+
+        (* now RHS *)
+        fpf out " ->@ ";
+
+        fpf out "@[<hv>`Map [@,`Text %S,@ " (str_of_id self c K_cstor);
+        (match (args, labels) with
+        | [], _ -> fpf out "`Null"
+        | _, None ->
+          fpf out "`Array [@[";
+          List.iteri
+            (fun i a ->
+              if i > 0 then fpf out ";@ ";
+              cg_to_cbor_ty self out a ~value:(spf "x_%d" i))
+            args;
+          fpf out "@]]"
+        | _, Some lbls ->
+          assert (List.length lbls = List.length args);
+          fpf out "`Map [@[";
+          CCList.iteri2
+            (fun i lbl ty ->
+              fpf out "(`Text %S, %t);@ " (str_of_id self lbl K_field)
+                (fun out -> cg_to_cbor_ty self out ty ~value:(spf "x_%d" i)))
+            lbls args;
+
+          fpf out "@]]");
+        fpf out "@,@]]";
+        fpf out "@]")
+      cstors
+  | Type.Builtin _ -> assert false (* TODO *)
+  | Type.Alias { target } -> cg_to_cbor_ty self out target ~value:"self"
+  | Type.Other | Type.Skolem ->
+    fpf out "assert false (* TODO: other/skolem type *)");
+  fpf out "@]"
+
+(** Conversion from CBOR for these types *)
+let cg_of_cbor_ty_decl (self : state) ~sep ~clique (out : Fmt.t)
+    (ty_def : Type.def) : unit =
+  let to_cbor_name = str_of_id_name (Uid.name ty_def.name) K_ty in
+  let args =
+    match ty_def.params with
+    | [] -> ""
+    | l ->
+      spf "(%s)" @@ String.concat ","
+      @@ List.map (fun tyv -> spf "%s_to_cbor" (Uid.name tyv)) l
+  in
+
+  fpf out "@[<2>%s %s%s self : cbor =@ " sep to_cbor_name args;
+
+  match ty_def.decl with
+  | Type.Record rows ->
+    assert false
+    (*
+    fpf out "@[<hv2>type %s%s = {@ " name args;
+    List.iter
+      (fun { Type.f; ty } ->
+        fpf out "@[<1>%s:@ %a@];@ " (str_of_id self f K_field)
+          (cg_ty ~clique self) ty)
+      rows;
+    fpf out "@]}"
+  *)
+  | Type.Algebraic cstors ->
+    assert false
+    (*
+    fpf out "@[<hv2>type %s%s =@ " name args;
+    List.iter
+      (fun { Type.c; args; labels } ->
+        fpf out "@[| %s" (str_of_id self c K_cstor);
+        (match (args, labels) with
+        | [], _ -> ()
+        | _, None ->
+          fpf out " of ";
+          List.iteri
+            (fun i a ->
+              if i > 0 then fpf out "@ * ";
+              cg_ty ~clique self out a)
+            args
+        | _, Some lbls ->
+          assert (List.length lbls = List.length args);
+          fpf out " of ";
+          Uid.Tbl.add self.cstor_labels c lbls;
+          fpf out "{@[";
+          List.iter2
+            (fun lbl a ->
+              fpf out "@[<1>%s:@ %a@};@ "
+                (str_of_id self lbl K_field)
+                (cg_ty ~clique self) a)
+            lbls args;
+          fpf out "@]}");
+        fpf out "@]@ ")
+      cstors
+      *)
+  | Type.Builtin _ -> assert false (* TODO *)
+  | Type.Alias { target } ->
+    assert false
+    (* TODO
+       fpf out "@[<2>type %s%s =@ " name args;
+       cg_ty ~clique self out target;
+       fpf out "@]"
+    *)
+  | Type.Other | Type.Skolem -> assert false
+(* TODO
+   fpf out "@[<v>(* (other) *)@ @[type %s%s@]@]" name args
+*)
 
 let cg_fun (self : state) ~sep (out : Fmt.t) (f : Term.fun_decl) : unit =
   fpf out "@[<hv2>%s %a =@ %a@]" sep (cg_pat self) f.pat (cg_term self) f.body
+
+let prefix_of_recursive ~recursive i =
+  if i > 0 then
+    "and"
+  else if recursive then
+    "let rec"
+  else
+    "let"
 
 let rec cg_decl (self : state) (out : Fmt.t) (d : Decl.t) : unit =
   match d.view with
   | Decl.Ty { tys = defs } ->
     let clique = List.map (fun d -> d.Type.name) defs in
-    List.iter (cg_ty_decl self ~clique out) defs
+    List.iter (cg_ty_decl self ~clique out) defs;
+
+    List.iteri
+      (fun i ty ->
+        let sep = prefix_of_recursive ~recursive:true i in
+        cg_to_cbor_ty_decl self ~sep ~clique out ty)
+      defs
+    (* TODO
+       List.iteri
+         (fun i ty ->
+           let sep = prefix_of_recursive ~recursive:true i in
+           cg_of_cbor_ty_decl self ~sep ~clique out ty)
+         defs
+    *)
   | Decl.Fun { recursive; fs } ->
     fpf out "@[<hv>";
     List.iteri
       (fun i f ->
-        let sep =
-          if i = 0 then
-            if recursive then
-              "let rec"
-            else
-              "let"
-          else
-            "and"
-        in
+        let sep = prefix_of_recursive ~recursive i in
         cg_fun ~sep self out f)
       fs;
     fpf out "@]"
