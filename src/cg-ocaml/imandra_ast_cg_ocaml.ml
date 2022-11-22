@@ -61,18 +61,14 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
             | _, "t" -> mod_name
             | _ -> mod_name @ [ base_name ]
           in
-          String.concat "" l
-        | K_mod | K_cstor ->
-          Util.join_path mod_name (String.capitalize_ascii base_name)
+          String.uncapitalize_ascii @@ String.concat "__" l
+        | K_mod | K_cstor -> String.capitalize_ascii base_name
         | K_ty_var ->
           (* remove the "'" *)
           String.capitalize_ascii (String.sub name 1 (String.length name - 1))
-        | K_field ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
-        | K_var ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
-        | K_fun ->
-          Util.join_path mod_name @@ String.uncapitalize_ascii base_name
+        | K_field -> String.uncapitalize_ascii base_name
+        | K_var -> String.uncapitalize_ascii base_name
+        | K_fun -> String.uncapitalize_ascii base_name
       in
       let s = gensym self base in
       Str_tbl.add self.seen s ();
@@ -355,7 +351,7 @@ let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
           fpf out "{@[";
           List.iter2
             (fun lbl a ->
-              fpf out "@[<1>%s:@ %a@};@ "
+              fpf out "@[<1>%s:@ %a@];@ "
                 (str_of_id self lbl K_field)
                 (cg_ty ~clique self) a)
             lbls args;
