@@ -52,7 +52,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
       (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
       let mod_name, base_name = Util.split_path name in
-      let base =
+      let base, must_be_unique =
         match kind with
         | K_ty ->
           let l =
@@ -61,16 +61,23 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
             | _, "t" -> mod_name
             | _ -> mod_name @ [ base_name ]
           in
-          String.uncapitalize_ascii @@ String.concat "__" l
-        | K_mod | K_cstor -> String.capitalize_ascii base_name
+          (String.uncapitalize_ascii @@ String.concat "__" l, true)
+        | K_mod -> (String.capitalize_ascii base_name, true)
+        | K_cstor -> (String.capitalize_ascii base_name, false)
         | K_ty_var ->
           (* remove the "'" *)
-          String.capitalize_ascii (String.sub name 1 (String.length name - 1))
-        | K_field -> String.uncapitalize_ascii base_name
-        | K_var -> String.uncapitalize_ascii base_name
-        | K_fun -> String.uncapitalize_ascii base_name
+          ( String.capitalize_ascii (String.sub name 1 (String.length name - 1)),
+            true )
+        | K_field -> (String.uncapitalize_ascii base_name, false)
+        | K_var -> (String.uncapitalize_ascii base_name, true)
+        | K_fun -> (String.uncapitalize_ascii base_name, true)
       in
-      let s = gensym self base in
+      let s =
+        if must_be_unique then
+          gensym self base
+        else
+          base
+      in
       Str_tbl.add self.seen s ();
       Uid.Tbl.add self.uids id s;
       s)
