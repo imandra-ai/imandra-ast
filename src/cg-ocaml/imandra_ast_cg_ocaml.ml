@@ -1,12 +1,14 @@
 module Str_tbl = CCHashtbl.Make (CCString)
 module Fmt = CCFormat
+module A = Ocaml_ast
+module E = A.Expr
 
 let spf = Printf.sprintf
 let fpf = Fmt.fprintf
 let[@inline] ( let@ ) f x = f x
 
 type state = {
-  code: Buffer.t;
+  code: A.Decl.t CCVector.vector;
   ty_defs: Type.Defs.t;
   cstor_labels: Uid.t list Uid.Tbl.t; (* cstor -> its labels *)
   uids: string Uid.Tbl.t;
@@ -82,23 +84,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
       Uid.Tbl.add self.uids id s;
       s)
 
-(** Allocate local formatter, add the content to the code buffer *)
-let with_local_fmt (self : state) (f : Fmt.t -> unit) : unit =
-  let buf = Buffer.create 32 in
-  let out = Format.formatter_of_buffer buf in
-  Fmt.fprintf out "@[<2>";
-  let@ () =
-    Fun.protect ~finally:(fun () ->
-        Fmt.fprintf out "@]@.";
-        Buffer.add_buffer self.code buf)
-  in
-  f out
-
-let str_of_cg (self : state) (cg : state -> Buffer.t -> 'a -> unit) (x : 'a) :
-    string =
-  let buf = Buffer.create 32 in
-  cg self buf x;
-  Buffer.contents buf
+let add_decl (self : state) (d : A.Decl.t) = CCVector.push self.code d
 
 (** Emit type *)
 let cg_ty ?(clique = []) (self : state) (out : Fmt.t) (ty : Type.t) : unit =
@@ -384,7 +370,7 @@ let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
 let cg_fun (self : state) ~sep (out : Fmt.t) (f : Term.fun_decl) : unit =
   fpf out "@[<hv2>%s %a =@ %a@]" sep (cg_pat self) f.pat (cg_term self) f.body
 
-let rec cg_decl (self : state) (out : Fmt.t) (d : Decl.t) : unit =
+let rec cg_decl (self : state) (d : Decl.t) : unit =
   match d.view with
   | Decl.Ty { tys = defs } ->
     let clique = List.map (fun d -> d.Type.name) defs in
@@ -418,7 +404,7 @@ let codegen (decls : Decl.t list) : string =
   let ty_defs = Decl.ty_defs_of_decls decls in
   let st =
     {
-      code = Buffer.create 64;
+      code = CCVector.create ();
       seen = Str_tbl.create 8;
       ty_defs;
       cstor_labels = Uid.Tbl.create 16;
@@ -426,10 +412,9 @@ let codegen (decls : Decl.t list) : string =
       gen = 1;
     }
   in
-  Printf.bprintf st.code "(* generated from imandra-ast *)\n%s\n" prelude;
-  List.iter
-    (fun d ->
-      let@ out = with_local_fmt st in
-      fpf out "%a@." (cg_decl st) d)
-    decls;
-  Buffer.contents st.code
+  add_decl st
+    (A.Decl.raw (spf "(* generated from imandra-ast *)\n%s\n" prelude));
+  List.iter (cg_decl st) decls;
+  Fmt.asprintf "@[<v>%a@]@."
+    Fmt.(iter ~sep:(return "@ ") A.Decl.pp)
+    (CCVector.to_iter st.code)
