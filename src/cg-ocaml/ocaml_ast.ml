@@ -3,6 +3,7 @@
 module Fmt = CCFormat
 
 let spf = Printf.sprintf
+let fpf = Format.fprintf
 
 (** Expression used for code generation *)
 module Expr = struct
@@ -27,6 +28,7 @@ module Expr = struct
     | E_tyapp of string * t list
     | E_cstor_app of string * t list
     | E_seq of t list (* ; *)
+    | E_list of t list (* list literal *)
     | E_comment of string * t
     | E_fun of unit fun_lbl * string * t option * t
     | E_let of [ `Rec of bool ] * (t * t) list * t
@@ -59,9 +61,7 @@ module Expr = struct
     | `Lbl -> "~"
     | `Optional _ -> "?"
 
-  let rec pp out =
-    let fpf = Format.fprintf in
-    function
+  let rec pp_top out = function
     | E_const i -> fpf out "%d" i
     | E_var s | E_glob s -> Fmt.string out s
     | E_ty_lbl (s, e) -> Fmt.fprintf out "%s:@[%a@]" s pp e
@@ -75,14 +75,18 @@ module Expr = struct
       Fmt.fprintf out "%s of %a" c Fmt.(list ~sep:(return " *@ ") pp) l
     | E_tuple (sep, l) ->
       let pp_sep out () = Fmt.fprintf out "%s@ " sep in
-      Fmt.fprintf out "(%a)" Fmt.(list ~sep:pp_sep pp) l
+      Fmt.fprintf out "%a" Fmt.(list ~sep:pp_sep pp) l
+    | E_list l ->
+      Fmt.fprintf out "[@[%a@]]"
+        Fmt.(list ~sep:(return ";@ ") @@ hovbox pp_top)
+        l
     | E_app (f, []) -> pp out f
     | E_app (f, args) ->
-      fpf out "(@[<1>%a@ %a@])" pp f Fmt.(list ~sep:(return "@ ") pp) args
+      fpf out "@[<1>%a@ %a@]" pp f Fmt.(list ~sep:(return "@ ") pp) args
     | E_cstor_app (c, []) -> fpf out "%s" c
-    | E_cstor_app (c, [ x ]) -> fpf out "(@[<1>%s@ %a@])" c pp x
+    | E_cstor_app (c, [ x ]) -> fpf out "@[<1>%s@ %a@]" c pp x
     | E_cstor_app (c, l) ->
-      fpf out "(@[<1>%s (@[%a@])@])" c Fmt.(list ~sep:(return ",@ ") pp) l
+      fpf out "@[<1>%s (@[%a@])@]" c Fmt.(list ~sep:(return ",@ ") pp) l
     | E_tyapp (s, []) -> Fmt.string out s
     | E_tyapp (s, l) ->
       Fmt.fprintf out "(%a) %s" Fmt.(list ~sep:(return ",@ ") pp) l s
@@ -142,7 +146,15 @@ module Expr = struct
         fpf out "{@[<hv>(%a) with@ %a@]}" pp rest
           Fmt.(list ~sep:(return ";@ ") pppair)
           l)
-    | E_beginend t -> fpf out "@[@[<2>begin@ %a@]@ end@]" pp t
+    | E_beginend t -> fpf out "@[@[<2>begin@ %a@]@ end@]" pp_top t
+
+  and pp out = function
+    | ( E_tuple _
+      | E_app (_, _ :: _)
+      | E_cstor_app (_, _ :: _)
+      | E_tyapp (_, _ :: _) ) as e ->
+      fpf out "(%a)" pp_top e
+    | e -> pp_top out e
 
   let to_string : t -> string = Fmt.to_string pp
   let const i = E_const i
@@ -158,6 +170,7 @@ module Expr = struct
   let if_ a b c : t = E_if (a, b, c)
   let vbar l = E_vbar l
   let vbar_arrow l = E_vbar_arrow l
+  let list_ l = E_list l
   let match_ e l : t = E_match (e, l)
   let for_ i a b bod : t = E_for (i, a, b, bod)
   let beginend a : t = E_beginend a
@@ -238,7 +251,7 @@ module Expr = struct
         u
     | _ -> let_l ?rec_ [ (var v, t) ] u
 
-  let let_pat pat t u : t = E_let (pat, t, u)
+  let let_pat ?rec_ pat t u : t = let_l ?rec_ [ (pat, t) ] u
 
   let cstruct_sub ba off =
     app_glob "Cstruct.sub"
@@ -331,8 +344,8 @@ module Decl = struct
         | Some ty -> Fmt.fprintf out "@ : %a" Expr.pp ty
       in
       let pp1 ~pre (pat, ret, bod) =
-        Fmt.fprintf out "@[<2>%s @[<2>%a@,%a@] =@ %a@]" pre Expr.pp pat pp_ret
-          ret Expr.pp bod
+        Fmt.fprintf out "@[<2>%s @[<2>%a@,%a@] =@ %a@]" pre Expr.pp_top pat
+          pp_ret ret Expr.pp bod
       in
       pp1 ~pre:("let" ^ pp_rec) f1;
       List.iter (pp1 ~pre:"and") fs

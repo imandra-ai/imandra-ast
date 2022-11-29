@@ -4,7 +4,7 @@
   (name t1)
   (modules t1)
   (deps t1.json)
-  (libraries containers yojson imandra-ast imandra-ast.cg-ocaml))
+  (libraries containers yojson imandra-ast imandra-ast.cg-ocaml cbor))
 
 (rule
   (targets t1_ml.ml)
@@ -15,5 +15,5 @@
 (test
   (name t1_ml)
   (modules t1_ml test_t1_ml)
-  (libraries containers imandra-prelude))
+  (libraries containers cbor imandra-prelude))
 

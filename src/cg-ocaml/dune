@@ -5,7 +5,8 @@
   (modules :standard \ prelude)
   (synopsis "OCaml codegen for imandra-ast")
   (flags :standard -open Imandra_ast)
-  (libraries containers imandra-ast))
+  (preprocess (pps ppx_deriving.std))
+  (libraries containers imandra-ast ppx_deriving.runtime))
 
 (rule
   (targets prelude_code.ml)

@@ -12,23 +12,32 @@ type code_stack = {
   parent: (string * code_stack) option; (* when inside a module with this name *)
 }
 
-type state = {
-  mutable code: code_stack;
-  ty_defs: Type.Defs.t;
-  cstor_labels: Uid.t list Uid.Tbl.t; (* cstor -> its labels *)
-  uids: string Uid.Tbl.t;
-  seen: unit Str_tbl.t;
-  mutable gen: int;
-}
-
 type kind =
   | K_ty_var
   | K_cstor
   | K_field
   | K_fun
   | K_ty
+  | K_ty_to_cbor
+  | K_ty_of_cbor
   | K_var
   | K_mod
+[@@deriving eq]
+
+module Uid_kind_tbl = CCHashtbl.Make (struct
+  type t = Uid.t * kind [@@deriving eq]
+
+  let hash = Hashtbl.hash
+end)
+
+type state = {
+  mutable code: code_stack;
+  ty_defs: Type.Defs.t;
+  cstor_labels: Uid.t list Uid.Tbl.t; (* cstor -> its labels *)
+  uids: string Uid_kind_tbl.t;
+  seen: unit Str_tbl.t;
+  mutable gen: int;
+}
 
 let prelude = Prelude_code.code
 
@@ -55,7 +64,7 @@ let gensym (self : state) (base : string) : string =
 
 (** find or create OCaml symbol for this ID *)
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
-  Uid.Tbl.get_or_add self.uids ~k:id ~f:(fun id ->
+  Uid_kind_tbl.get_or_add self.uids ~k:(id, kind) ~f:(fun (id, kind) ->
       (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
       let mod_name, base_name = Util.split_path name in
@@ -69,6 +78,22 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
             | _ -> mod_name @ [ base_name ]
           in
           (String.uncapitalize_ascii @@ String.concat "__" l, true)
+        | K_ty_to_cbor ->
+          let base_name =
+            if base_name = "t" then
+              "to_cbor"
+            else
+              "cbor_of_" ^ base_name
+          in
+          (String.uncapitalize_ascii base_name, true)
+        | K_ty_of_cbor ->
+          let base_name =
+            if base_name = "t" then
+              "of_cbor"
+            else
+              "cbor_to_" ^ base_name
+          in
+          (String.uncapitalize_ascii base_name, true)
         | K_mod -> (String.capitalize_ascii base_name, true)
         | K_cstor -> (String.capitalize_ascii base_name, false)
         | K_ty_var ->
@@ -86,7 +111,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
           base
       in
       Str_tbl.add self.seen s ();
-      Uid.Tbl.add self.uids id s;
+      Uid_kind_tbl.add self.uids (id, kind) s;
       s)
 
 let add_decl (self : state) (d : A.Decl.t) =
@@ -311,6 +336,118 @@ let cg_ty_decl (self : state) ~clique (ty_def : Type.def) :
   in
   (name, args, rhs)
 
+let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
+  let rec recurse ty expr : E.t =
+    match Type.view ty with
+    | Type.Var v ->
+      let str = str_of_id self v K_ty_to_cbor in
+      E.app_var str [ expr ]
+    | Type.Arrow _ -> E.raw_f "assert false (* cannot encode arrow *)"
+    | Type.Tuple l ->
+      E.let_l [ (E.tuple @@ List.mapi (fun i _ -> E.var_f "_x_%d" i) l, expr) ]
+      @@ E.app_cstor "`List"
+      @@ List.mapi (fun i ty -> recurse ty (E.var_f "_x_%d" i)) l
+    | Type.Constr (c, []) ->
+      let repr =
+        (* use deriving-yojson module wrappers to support
+           serialization of these [int] and [real] *)
+        match Uid.name c with
+        | "int" -> "DJ_Z.to_cbor"
+        | "real" -> "DJ_Q.to_cbor"
+        | _name -> str_of_id self c K_ty_to_cbor
+      in
+      E.app_var repr [ expr ]
+    | Type.Constr (c, args) ->
+      let f = str_of_id self c K_ty_to_cbor in
+      (* FIXME: pass arguments *)
+      E.app_var f [ expr ]
+  in
+
+  let ty = Type.chase_deep self.ty_defs ty in
+  recurse ty expr
+
+let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
+    E.t * _ * E.t =
+  let name = str_of_id self ty_def.name K_ty_to_cbor in
+
+  let expr_self = E.var "self" in
+  let args =
+    List.map (fun tyv -> E.var @@ str_of_id self tyv K_var) ty_def.params
+    @ [ E.cast expr_self (E.var @@ str_of_id self ty_def.name K_ty) ]
+  in
+
+  let rhs =
+    match ty_def.decl with
+    | Type.Record rows ->
+      let rows =
+        List.map
+          (fun { Type.f; ty } ->
+            let f =
+              E.app_cstor "`Text" [ E.raw_f "%S" (str_of_id self f K_field) ]
+            and expr_self = E.field expr_self (str_of_id self f K_field) in
+            E.tuple [ f; cg_ty_to_cbor ~clique self ty expr_self ])
+          rows
+      in
+      E.app_cstor "`Map" [ E.list_ rows ]
+    | Type.Alias { target } -> cg_ty_to_cbor self ~clique target expr_self
+    | Type.Algebraic cstors ->
+      let conv_cstor { Type.c; args; labels } =
+        let c = str_of_id self c K_cstor in
+        let cbor_c_as_text = E.app_cstor "`Text" [ E.raw_f "%S" c ] in
+        match (args, labels) with
+        | [], _ -> E.(var c --> cbor_c_as_text)
+        | _, None ->
+          let vars = List.mapi (fun i _ -> E.var_f "_x_%d" i) args in
+          let cbor_args =
+            cbor_c_as_text
+            :: List.mapi
+                 (fun i ty -> cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i))
+                 args
+          in
+          E.(app_cstor c vars --> app_cstor "`Array" [ E.list_ cbor_args ])
+        | _, Some lbls ->
+          assert (List.length lbls = List.length args);
+          let pat =
+            E.app_cstor c
+              [
+                E.record
+                @@ List.mapi
+                     (fun i lbl ->
+                       (str_of_id self lbl K_field, E.var_f "_x_%d" i))
+                     lbls;
+              ]
+          in
+          let cbor_args =
+            [
+              cbor_c_as_text;
+              E.app_cstor "`Map"
+              @@ List.mapi
+                   (fun i ty ->
+                     let lbl = List.nth lbls i in
+                     E.tuple
+                       [
+                         E.app_cstor "`Text"
+                           [ E.raw_f "%S" @@ str_of_id self lbl K_field ];
+                         cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i);
+                       ])
+                   args;
+            ]
+          in
+          E.(pat --> app_cstor "`Array" [ E.list_ cbor_args ])
+      in
+      let cases = E.vbar @@ List.map conv_cstor cstors in
+      E.match_ expr_self cases
+    | _ -> E.raw " assert false (* TODO *)"
+    (* TODO *)
+    (*
+    | Type.Other | Type.Skolem ->
+      let code = E.comment "(other)" @@ E.raw (String.capitalize_ascii name) in
+      (code, false)
+      *)
+  in
+
+  (E.app_var name args, Some (E.var "cbor"), rhs)
+
 let cg_fun (self : state) (f : Term.fun_decl) : E.t * _ * E.t =
   (cg_pat self f.pat, None, cg_term self f.body)
 
@@ -318,8 +455,13 @@ let rec cg_decl (self : state) (d : Decl.t) : unit =
   match d.view with
   | Decl.Ty { tys = defs } ->
     let clique = List.map (fun d -> d.Type.name) defs in
+    (* declare types *)
     let tys = List.map (cg_ty_decl self ~clique) defs in
-    add_decl self (A.Decl.ty_l tys)
+    add_decl self (A.Decl.ty_l tys);
+
+    (* to_cbor *)
+    let to_cbor = List.map (cg_ty_decl_to_cbor self ~clique) defs in
+    add_decl self (A.Decl.let_l ~rec_:true to_cbor)
   | Decl.Fun { recursive; fs } ->
     let fs = List.map (cg_fun self) fs in
     add_decl self (A.Decl.let_l ~rec_:recursive fs)
@@ -342,7 +484,7 @@ let codegen (decls : Decl.t list) : string =
       seen = Str_tbl.create 8;
       ty_defs;
       cstor_labels = Uid.Tbl.create 16;
-      uids = Uid.Tbl.create 32;
+      uids = Uid_kind_tbl.create 32;
       gen = 1;
     }
   in
@@ -350,5 +492,5 @@ let codegen (decls : Decl.t list) : string =
     (A.Decl.raw (spf "(* generated from imandra-ast *)\n%s\n" prelude));
   List.iter (cg_decl st) decls;
   Fmt.asprintf "@[<v>%a@]@."
-    Fmt.(list ~sep:(return "@ ") A.Decl.pp)
+    Fmt.(list ~sep:(return "@ @ ") A.Decl.pp)
     (List.rev st.code.decls)
