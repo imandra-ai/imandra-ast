@@ -327,52 +327,59 @@ let cg_ty_decl (self : state) ~clique (out : Fmt.t) (ty_def : Type.def) : unit =
       @@ List.map (fun tyv -> str_of_id self tyv K_ty_var) l
   in
 
-  (match ty_def.decl with
-  | Type.Record rows ->
-    fpf out "@[<hv2>type %s%s = {@ " name args;
-    List.iter
-      (fun { Type.f; ty } ->
-        fpf out "@[<1>%s:@ %a@];@ " (str_of_id self f K_field)
-          (cg_ty ~clique self) ty)
-      rows;
+  let can_derive =
+    match ty_def.decl with
+    | Type.Record rows ->
+      fpf out "@[<hv2>type %s%s = {@ " name args;
+      List.iter
+        (fun { Type.f; ty } ->
+          fpf out "@[<1>%s:@ %a@];@ " (str_of_id self f K_field)
+            (cg_ty ~clique self) ty)
+        rows;
 
-    fpf out "@]}"
-  | Type.Algebraic cstors ->
-    fpf out "@[<hv2>type %s%s =@ " name args;
-    List.iter
-      (fun { Type.c; args; labels } ->
-        fpf out "@[| %s" (str_of_id self c K_cstor);
-        (match (args, labels) with
-        | [], _ -> ()
-        | _, None ->
-          fpf out " of ";
-          List.iteri
-            (fun i a ->
-              if i > 0 then fpf out "@ * ";
-              cg_ty ~clique self out a)
-            args
-        | _, Some lbls ->
-          assert (List.length lbls = List.length args);
-          fpf out " of ";
-          Uid.Tbl.add self.cstor_labels c lbls;
-          fpf out "{@[";
-          List.iter2
-            (fun lbl a ->
-              fpf out "@[<1>%s:@ %a@];@ "
-                (str_of_id self lbl K_field)
-                (cg_ty ~clique self) a)
-            lbls args;
-          fpf out "@]}");
-        fpf out "@]@ ")
-      cstors
-  | Type.Builtin _ -> assert false (* TODO *)
-  | Type.Alias { target } ->
-    fpf out "@[<2>type %s%s =@ " name args;
-    cg_ty ~clique self out target;
-    fpf out "@]"
-  | Type.Other | Type.Skolem ->
-    fpf out "@[<v>(* (other) *)@ @[type %s%s@]@]" name args);
-  fpf out "%s" "[@@deriving yojson]"
+      fpf out "@]}";
+      true
+    | Type.Algebraic cstors ->
+      fpf out "@[<hv2>type %s%s =@ " name args;
+      List.iter
+        (fun { Type.c; args; labels } ->
+          fpf out "@[| %s" (str_of_id self c K_cstor);
+          (match (args, labels) with
+          | [], _ -> ()
+          | _, None ->
+            fpf out " of ";
+            List.iteri
+              (fun i a ->
+                if i > 0 then fpf out "@ * ";
+                cg_ty ~clique self out a)
+              args
+          | _, Some lbls ->
+            assert (List.length lbls = List.length args);
+            fpf out " of ";
+            Uid.Tbl.add self.cstor_labels c lbls;
+            fpf out "{@[";
+            List.iter2
+              (fun lbl a ->
+                fpf out "@[<1>%s:@ %a@];@ "
+                  (str_of_id self lbl K_field)
+                  (cg_ty ~clique self) a)
+              lbls args;
+            fpf out "@]}");
+          fpf out "@]@ ")
+        cstors;
+      true
+    | Type.Builtin _ -> assert false (* TODO *)
+    | Type.Alias { target } ->
+      fpf out "@[<2>type %s%s =@ " name args;
+      cg_ty ~clique self out target;
+      fpf out "@]";
+      not (Type.is_arrow self.ty_defs target)
+    | Type.Other | Type.Skolem ->
+      fpf out "@[<v>(* (other) *)@ @[type %s%s@]@]" name args;
+      false
+  in
+
+  if can_derive then fpf out "%s" "[@@deriving yojson]"
 
 let cg_fun (self : state) ~sep (out : Fmt.t) (f : Term.fun_decl) : unit =
   fpf out "@[<hv2>%s %a =@ %a@]" sep (cg_pat self) f.pat (cg_term self) f.body

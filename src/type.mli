@@ -104,6 +104,8 @@ val in_out_types : Defs.t -> t -> t list * t
 val in_out_types_no_chase : t -> t list * t
 (** Open the toplevel function types *)
 
+val is_arrow : Defs.t -> t -> bool
+
 val n_args : Defs.t -> t -> int
 (** Number of arguments for a function type *)
 
