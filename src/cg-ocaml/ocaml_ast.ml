@@ -88,6 +88,7 @@ module Expr = struct
     | E_cstor_app (c, l) ->
       fpf out "@[<1>%s (@[%a@])@]" c Fmt.(list ~sep:(return ",@ ") pp) l
     | E_tyapp (s, []) -> Fmt.string out s
+    | E_tyapp (s, [ x ]) -> Fmt.fprintf out "%a %s" pp_top x s
     | E_tyapp (s, l) ->
       Fmt.fprintf out "(%a) %s" Fmt.(list ~sep:(return ",@ ") pp) l s
     | E_seq l -> fpf out "(@[<v>%a@])" Fmt.(list ~sep:(return ";@ ") pp) l
@@ -100,10 +101,10 @@ module Expr = struct
           ""
       in
       fpf out "@[<v>";
-      let pp1 ~pre out (v, t) = fpf out "@[<2>%s %a =@ %a@]" pre pp v pp t in
+      let pp1 ~pre out (v, t) = fpf out "@[<2>%s %a =@ %a@]@ " pre pp v pp t in
       pp1 ~pre:("let" ^ rec_) out b1;
       List.iter (pp1 ~pre:"and" out) bs;
-      fpf out " in@ %a@]" pp bod
+      fpf out "in %a@]" pp bod
     | E_fun (lbl, v, None, body) ->
       fpf out "(@[fun %s%s ->@ %a@])" (str_of_fun_lbl lbl) v pp body
     | E_fun (lbl, v, Some ty, body) ->
@@ -218,6 +219,8 @@ module Expr = struct
   let infix s a b = E_infix (s, a, b)
   let infix_no_paren s a b = E_infix_noparen (s, a, b)
   let when_ a b : t = E_when (a, b)
+  let string_lit s : t = raw_f "%S" s
+  let string_lit_f fmt = Fmt.kasprintf string_lit fmt
 
   (* no simps *)
   let ( - ) a b = infix "-" a b
