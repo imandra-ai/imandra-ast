@@ -517,8 +517,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
                      let f_name = str_of_id self f K_field in
                      let value =
                        let key = app_cstor "`Text" [ string_lit f_name ] in
-                       let_ "v"
-                         (app_var "Stdlib.List.assoc" [ key; var "rows" ])
+                       let_ "v" (app_var "Caml.List.assoc" [ key; var "rows" ])
                        @@ cg_ty_of_cbor ~clique self ty (var "v")
                      in
 
@@ -561,7 +560,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
                   let f_name = str_of_id self f K_field in
                   let value =
                     let key = app_cstor "`Text" [ string_lit f_name ] in
-                    let_ "v" (app_var "Stdlib.List.assoc" [ key; var "rows" ])
+                    let_ "v" (app_var "Caml.List.assoc" [ key; var "rows" ])
                     @@ cg_ty_of_cbor ~clique self ty (var "v")
                   in
 
