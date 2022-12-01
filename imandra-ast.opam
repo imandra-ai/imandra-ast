@@ -12,8 +12,12 @@ depends: [
   "cmdliner"
   "ppx_deriving"
   "ppx_deriving_yojson"
+  "imandra-prelude"
+  "{with-test}"
   "yojson"
+  "{with-test}"
   "cbor"
+  "{with-test}"
   "zarith" {>= "1.12"}
   "containers" {>= "3.7" & < "4."}
 ]
