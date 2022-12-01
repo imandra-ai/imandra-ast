@@ -11,6 +11,7 @@
 (package
   (name imandra-ast)
   (depends
+    (dune (>= 2.0))
     (yojson (>= 1.6))
     cmdliner
     ppx_deriving
