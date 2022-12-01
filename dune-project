@@ -15,5 +15,7 @@
     cmdliner
     ppx_deriving
     ppx_deriving_yojson
+    yojson
+    cbor
     (zarith (>= 1.12))
     (containers (and (>= 3.7) (< 4.)))))

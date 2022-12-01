@@ -20,6 +20,7 @@ jobs:
     - uses: ocaml/setup-ocaml@v2
       with:
         ocaml-compiler: ${{ matrix.ocaml-compiler }}
+    - run: opam pin vendor/imandra-prelude/#HEAD -y -n
     - run: opam pin -n .
     - run: opam depext -yt imandra-ast
     - run: opam install -t . --deps-only
