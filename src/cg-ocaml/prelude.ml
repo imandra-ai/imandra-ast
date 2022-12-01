@@ -59,3 +59,5 @@ module DJ_Q = struct
 end
 
 open Imandra_prelude
+
+[@@@ocaml.warning "-39"]
