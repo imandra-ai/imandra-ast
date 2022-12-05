@@ -62,6 +62,15 @@ let gensym (self : state) (base : string) : string =
   in
   loop 0
 
+let is_base_infix s =
+  match s.[0] with
+  | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
+  | _ -> true
+
+let is_infix s =
+  let base = Util.chop_path s in
+  base = "" || is_base_infix base
+
 (** find or create OCaml symbol for this ID *)
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid_kind_tbl.get_or_add self.uids ~k:(id, kind) ~f:(fun (id, kind) ->
@@ -101,7 +110,15 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
           ( String.capitalize_ascii (String.sub name 1 (String.length name - 1)),
             true )
         | K_field -> (String.uncapitalize_ascii base_name, false)
-        | K_var -> (String.uncapitalize_ascii base_name, true)
+        | K_var ->
+          (* enclose an infix function base with parens *)
+          let base_name =
+            if is_base_infix base_name then
+              spf "( %s )" base_name
+            else
+              base_name
+          in
+          (String.uncapitalize_ascii base_name, true)
         | K_fun -> (String.uncapitalize_ascii base_name, true)
       in
       let s =
@@ -191,15 +208,6 @@ let rec cg_pat (self : state) (p : Term.pattern) : E.t =
     E.record
       (List.map (fun (f, p) -> (str_of_id self f K_field, recurse p)) rows)
   | Term.P_alias (v, p) -> E.as_ (recurse p) (str_of_id self v.id K_var)
-
-let is_base_infix s =
-  match s.[0] with
-  | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
-  | _ -> true
-
-let is_infix s =
-  let base = Util.chop_path s in
-  base = "" || is_base_infix base
 
 let rec cg_term (self : state) (t : Term.t) : E.t =
   let rec recurse t : E.t =
