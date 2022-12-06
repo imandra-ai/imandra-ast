@@ -357,11 +357,13 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       @@ List.mapi (fun i ty -> recurse ty (E.var_f "_x_%d" i)) l
     | Type.Constr (c, []) ->
       let repr =
-        (* use deriving-yojson module wrappers to support
-           serialization of these [int] and [real] *)
+        (* use special modules to support serialization of primitives
+           [int], [real], [string], and [bool] *)
         match Uid.name c with
         | "int" -> "DJ_Z.to_cbor"
         | "real" -> "DJ_Q.to_cbor"
+        | "string" -> "DJ_String.to_cbor"
+        | "bool" -> "DJ_Bool.to_cbor"
         | _name -> str_of_id self c K_ty_to_cbor
       in
       E.app_var repr [ expr ]
@@ -482,11 +484,13 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
            ])
     | Type.Constr (c, []) ->
       let repr =
-        (* use deriving-yojson module wrappers to support
-           serialization of these [int] and [real] *)
+        (* use special modules to support serialization of primitives
+           [int], [real], [string], and [bool] *)
         match Uid.name c with
         | "int" -> "DJ_Z.of_cbor"
         | "real" -> "DJ_Q.of_cbor"
+        | "string" -> "DJ_String.of_cbor"
+        | "bool" -> "DJ_Bool.of_cbor"
         | _name -> str_of_id self c K_ty_of_cbor
       in
       E.app_var repr [ expr ]

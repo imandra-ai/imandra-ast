@@ -58,6 +58,28 @@ module DJ_Q = struct
     | _ -> cbor_error c "expected Q.t (tag 30, [num,den])"
 end
 
+module DJ_String = struct
+  type t = string
+
+  let to_cbor (self : t) : cbor = `Text self
+
+  let of_cbor (c : cbor) : t =
+    match c with
+    | `Text s -> s
+    | _ -> cbor_error c "expected string"
+end
+
+module DJ_Bool = struct
+  type t = bool
+
+  let to_cbor (self : t) : cbor = `Bool self
+
+  let of_cbor (c : cbor) : t =
+    match c with
+    | `Bool b -> b
+    | _ -> cbor_error c "expected bool"
+end
+
 open Imandra_prelude
 
 [@@@ocaml.warning "-39"]
