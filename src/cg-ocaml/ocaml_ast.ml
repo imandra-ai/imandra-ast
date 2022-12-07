@@ -75,7 +75,7 @@ module Expr = struct
       Fmt.fprintf out "%s of %a" c Fmt.(list ~sep:(return " *@ ") pp) l
     | E_tuple (sep, l) ->
       let pp_sep out () = Fmt.fprintf out "%s@ " sep in
-      Fmt.fprintf out "%a" Fmt.(list ~sep:pp_sep pp) l
+      Fmt.fprintf out "(%a)" Fmt.(list ~sep:pp_sep pp) l
     | E_list l ->
       Fmt.fprintf out "[@[%a@]]"
         Fmt.(list ~sep:(return ";@ ") @@ hovbox pp_top)
