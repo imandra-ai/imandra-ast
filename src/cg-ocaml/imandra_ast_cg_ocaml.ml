@@ -446,16 +446,19 @@ let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
             [
               cbor_c_as_text;
               E.app_cstor "`Map"
-              @@ List.mapi
-                   (fun i ty ->
-                     let lbl = List.nth lbls i in
-                     E.tuple
-                       [
-                         E.app_cstor "`Text"
-                           [ E.string_lit @@ str_of_id self lbl K_field ];
-                         cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i);
-                       ])
-                   args;
+                [
+                  E.list_
+                    (List.mapi
+                       (fun i ty ->
+                         let lbl = List.nth lbls i in
+                         E.tuple
+                           [
+                             E.app_cstor "`Text"
+                               [ E.string_lit @@ str_of_id self lbl K_field ];
+                             cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i);
+                           ])
+                       args);
+                ];
             ]
           in
           E.(pat --> app_cstor "`Array" [ E.list_ cbor_args ])
