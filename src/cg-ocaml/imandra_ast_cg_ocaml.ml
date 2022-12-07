@@ -373,7 +373,9 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       | "list", [ arg ] ->
         E.(
           app_cstor "`Array"
-            [ app_var "List.map" [ fun_ "x" (recurse arg (var "x")); expr ] ])
+            [
+              app_var "Caml.List.map" [ fun_ "x" (recurse arg (var "x")); expr ];
+            ])
       | _ ->
         let f = str_of_id self c K_ty_to_cbor in
         E.app_var f [ expr ])
@@ -508,7 +510,7 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
           match_ expr @@ vbar
           @@ [
                app_cstor "`Array" [ var_f "lst" ]
-               --> app_var "List.map"
+               --> app_var "Caml.List.map"
                      [ fun_ "x" (recurse arg (var "x")); var_f "lst" ];
                raw "_"
                --> app_var "cbor_error" [ expr; string_lit "expected array" ];
