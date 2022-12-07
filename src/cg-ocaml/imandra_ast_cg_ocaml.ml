@@ -495,9 +495,14 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       in
       E.app_var repr [ expr ]
     | Type.Constr (c, args) ->
-      let f = str_of_id self c K_ty_of_cbor in
-      (* FIXME: pass arguments *)
-      E.app_var f [ expr ]
+      (match (Uid.name c, args) with
+      | "list", [ arg ] ->
+        E.(
+          app_cstor "`Array"
+            [ app_var "List.map" [ fun_ "x" (recurse arg (var "x")); expr ] ])
+      | _ ->
+        let f = str_of_id self c K_ty_of_cbor in
+        E.app_var f [ expr ])
   in
 
   let ty = Type.chase_deep self.ty_defs ty in
