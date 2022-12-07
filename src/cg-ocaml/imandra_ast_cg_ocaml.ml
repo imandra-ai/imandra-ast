@@ -350,7 +350,8 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
     | Type.Var v ->
       let str = str_of_id self v K_ty_to_cbor in
       E.app_var str [ expr ]
-    | Type.Arrow _ -> E.raw_f "assert false (* cannot encode arrow *)"
+    | Type.Arrow _ ->
+      E.raw_f "ignore self; assert false (* cannot encode arrow *)"
     | Type.Tuple l ->
       E.let_l [ (E.tuple @@ List.mapi (fun i _ -> E.var_f "_x_%d" i) l, expr) ]
       @@ E.app_cstor "`List"
@@ -476,7 +477,8 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
     | Type.Var v ->
       let str = str_of_id self v K_ty_of_cbor in
       E.app_var str [ expr ]
-    | Type.Arrow _ -> E.raw_f "assert false (* cannot decode arrow type *)"
+    | Type.Arrow _ ->
+      E.raw_f "ignore self; assert false (* cannot decode arrow type *)"
     | Type.Tuple l ->
       E.(
         match_ expr @@ vbar
