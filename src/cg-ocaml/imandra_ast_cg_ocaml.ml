@@ -354,8 +354,10 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       E.raw_f "ignore self; assert false (* cannot encode arrow *)"
     | Type.Tuple l ->
       E.let_l [ (E.tuple @@ List.mapi (fun i _ -> E.var_f "_x_%d" i) l, expr) ]
-      @@ E.app_cstor "`List"
-      @@ List.mapi (fun i ty -> recurse ty (E.var_f "_x_%d" i)) l
+      @@ E.app_cstor "`Array"
+           [
+             E.list_ @@ List.mapi (fun i ty -> recurse ty (E.var_f "_x_%d" i)) l;
+           ]
     | Type.Constr (c, []) ->
       let repr =
         (* use special modules to support serialization of primitives
@@ -488,7 +490,7 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       E.(
         match_ expr @@ vbar
         @@ [
-             app_cstor "`List"
+             app_cstor "`Array"
                [ list_ (List.mapi (fun i ty -> var_f "_x_%d" i) l) ]
              --> tuple (List.mapi (fun i ty -> recurse ty (var_f "_x_%d" i)) l);
              raw "_"
