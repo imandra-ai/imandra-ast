@@ -357,8 +357,7 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
     | Type.Var v ->
       let str = str_of_id self v K_ty_to_cbor in
       E.app_var str [ expr ]
-    | Type.Arrow _ ->
-      E.raw_f "ignore self; assert false (* cannot encode arrow *)"
+    | Type.Arrow _ -> E.raw_f "assert false (* cannot encode arrow *)"
     | Type.Tuple l ->
       E.let_l [ (E.tuple @@ List.mapi (fun i _ -> E.var_f "_x_%d" i) l, expr) ]
       @@ E.app_cstor "`Array"
@@ -397,7 +396,7 @@ let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
     E.t * _ * E.t =
   let name = str_of_id self ty_def.name K_ty_to_cbor in
 
-  let expr_self = E.var "self" in
+  let expr_self = E.var "_self" in
   let args =
     List.map (fun tyv -> E.var @@ str_of_id self tyv K_var) ty_def.params
     @ [ E.cast expr_self (E.var @@ str_of_id self ty_def.name K_ty) ]
@@ -491,8 +490,7 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
     | Type.Var v ->
       let str = str_of_id self v K_ty_of_cbor in
       E.app_var str [ expr ]
-    | Type.Arrow _ ->
-      E.raw_f "ignore self; assert false (* cannot decode arrow type *)"
+    | Type.Arrow _ -> E.raw_f "assert false (* cannot decode arrow type *)"
     | Type.Tuple l ->
       E.(
         match_ expr @@ vbar
@@ -539,7 +537,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
     E.t * _ * E.t =
   let name = str_of_id self ty_def.name K_ty_of_cbor in
 
-  let expr_self = E.var "self" in
+  let expr_self = E.var "_self" in
   let args =
     List.map (fun tyv -> E.var @@ str_of_id self tyv K_var) ty_def.params
     @ [ E.cast expr_self (E.var "cbor") ]
@@ -570,7 +568,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
                  |> List.split
                in
                let_l bs @@ record fields);
-               raw "_" --> raw {|cbor_error self "expected record"|};
+               raw "_" --> raw {|cbor_error _self "expected record"|};
              ])
     | Type.Algebraic cstors ->
       let conv_cstor { Type.c; args; labels } =
