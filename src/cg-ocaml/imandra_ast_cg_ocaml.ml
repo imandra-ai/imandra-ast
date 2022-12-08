@@ -139,7 +139,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
     | K_cstor | K_field | K_ty_var ->
       (* always flatten these *)
       str_of_user_id self id kind
-    | K_fun | K_ty | K_ty_to_cbor | K_ty_of_cbor | K_mod -> Uid.name id
+    | K_fun | K_ty | K_ty_to_cbor | K_ty_of_cbor | K_mod | K_var -> Uid.name id
   )
 
 let add_decl (self : state) (d : A.Decl.t) =
