@@ -4,14 +4,14 @@ exception Cbor_error of cbor * string
 
 let cbor_error c s = raise (Cbor_error (c, s))
 
-module DJ_Z = struct
+module BuiltinsSerde_Z = struct
   type t = Z.t
 
   let to_yojson t = `Int (Z.to_int t)
 
   let of_yojson = function
     | `Int i -> Ok (Z.of_int i)
-    | _ -> Error "DJ_Z.of_yojson"
+    | _ -> Error "BuiltinsSerde_Z.of_yojson"
 
   (* tag 2 (bytes) https://www.rfc-editor.org/rfc/rfc8949.html#name-bignums *)
   let to_cbor (self : t) : cbor =
@@ -36,29 +36,31 @@ module DJ_Z = struct
     | _ -> cbor_error c "expected Z.3 (tag 2 or 3)"
 end
 
-module DJ_Q = struct
+module BuiltinsSerde_Q = struct
   type t = Q.t
 
   let to_yojson t = `Float (Q.to_float t)
 
   let of_yojson = function
     | `Float f -> Ok (Q.of_float f)
-    | _ -> Error "DJ_Q.of_yojson"
+    | _ -> Error "BuiltinsSerde_Q.of_yojson"
 
   (* tag 30, [num,den] http://peteroupc.github.io/CBOR/rational.html *)
   let to_cbor (self : t) : cbor =
     let num = Q.num self and den = Q.den self in
-    `Tag (30, `Array [ DJ_Z.to_cbor num; DJ_Z.to_cbor den ])
+    `Tag
+      (30, `Array [ BuiltinsSerde_Z.to_cbor num; BuiltinsSerde_Z.to_cbor den ])
 
   let of_cbor (c : cbor) : t =
     match c with
     | `Tag (30, `Array [ num; den ]) ->
-      let num = DJ_Z.of_cbor num and den = DJ_Z.of_cbor den in
+      let num = BuiltinsSerde_Z.of_cbor num
+      and den = BuiltinsSerde_Z.of_cbor den in
       Q.make num den
     | _ -> cbor_error c "expected Q.t (tag 30, [num,den])"
 end
 
-module DJ_String = struct
+module BuiltinsSerde_String = struct
   type t = string
 
   let to_cbor (self : t) : cbor = `Text self
@@ -69,7 +71,7 @@ module DJ_String = struct
     | _ -> cbor_error c "expected string"
 end
 
-module DJ_Bool = struct
+module BuiltinsSerde_Bool = struct
   type t = bool
 
   let to_cbor (self : t) : cbor = `Bool self

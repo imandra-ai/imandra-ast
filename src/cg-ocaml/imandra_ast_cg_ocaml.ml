@@ -164,8 +164,8 @@ let cg_ty ?(clique = []) (self : state) (ty : Type.t) : E.t =
         (* use deriving-yojson module wrappers to support
            serialization of these [int] and [real] *)
         match Uid.name c with
-        | "int" -> "DJ_Z.t"
-        | "real" -> "DJ_Q.t"
+        | "int" -> "BuiltinsSerde_Z.t"
+        | "real" -> "BuiltinsSerde_Q.t"
         | _name -> str_of_id self c K_ty
       in
       E.var repr
@@ -363,10 +363,10 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
         (* use special modules to support serialization of primitives
            [int], [real], [string], and [bool] *)
         match Uid.name c with
-        | "int" -> "DJ_Z.to_cbor"
-        | "real" -> "DJ_Q.to_cbor"
-        | "string" -> "DJ_String.to_cbor"
-        | "bool" -> "DJ_Bool.to_cbor"
+        | "int" -> "BuiltinsSerde_Z.to_cbor"
+        | "real" -> "BuiltinsSerde_Q.to_cbor"
+        | "string" -> "BuiltinsSerde_String.to_cbor"
+        | "bool" -> "BuiltinsSerde_Bool.to_cbor"
         | _name -> str_of_id self c K_ty_to_cbor
       in
       E.app_var repr [ expr ]
@@ -501,10 +501,10 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
         (* use special modules to support serialization of primitives
            [int], [real], [string], and [bool] *)
         match Uid.name c with
-        | "int" -> "DJ_Z.of_cbor"
-        | "real" -> "DJ_Q.of_cbor"
-        | "string" -> "DJ_String.of_cbor"
-        | "bool" -> "DJ_Bool.of_cbor"
+        | "int" -> "BuiltinsSerde_Z.of_cbor"
+        | "real" -> "BuiltinsSerde_Q.of_cbor"
+        | "string" -> "BuiltinsSerde_String.of_cbor"
+        | "bool" -> "BuiltinsSerde_Bool.of_cbor"
         | _name -> str_of_id self c K_ty_of_cbor
       in
       E.app_var repr [ expr ]
