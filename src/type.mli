@@ -99,6 +99,7 @@ val mk_tuple : t list -> t
 val mk_skolem : Uid.t -> t
 (** Skolem type *)
 
+val defined_ids : ?init:Uid.Set.t -> def -> Uid.Set.t
 val in_out_types : Defs.t -> t -> t list * t
 
 val in_out_types_no_chase : t -> t list * t

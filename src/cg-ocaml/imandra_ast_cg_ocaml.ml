@@ -33,6 +33,7 @@ end)
 type state = {
   mutable code: code_stack;
   ty_defs: Type.Defs.t;
+  user_uids: Uid.Set.t; (* uids defined by the user, to be renamed *)
   cstor_labels: Uid.t list Uid.Tbl.t; (* cstor -> its labels *)
   uids: string Uid_kind_tbl.t;
   seen: unit Str_tbl.t;
@@ -71,8 +72,7 @@ let is_infix s =
   let base = Util.chop_path s in
   base = "" || is_base_infix base
 
-(** find or create OCaml symbol for this ID *)
-let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
+let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid_kind_tbl.get_or_add self.uids ~k:(id, kind) ~f:(fun (id, kind) ->
       (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
@@ -130,6 +130,13 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
       Str_tbl.add self.seen s ();
       Uid_kind_tbl.add self.uids (id, kind) s;
       s)
+
+(** find or create OCaml symbol for this ID *)
+let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
+  if Uid.Set.mem id self.user_uids then
+    str_of_user_id self id kind
+  else
+    Uid.name id
 
 let add_decl (self : state) (d : A.Decl.t) =
   self.code.decls <- d :: self.code.decls
@@ -672,6 +679,7 @@ let codegen (decls : Decl.t list) : string =
     {
       code = { decls = []; parent = None };
       seen = Str_tbl.create 8;
+      user_uids = Decl.defined_ids_of_decls decls;
       ty_defs;
       cstor_labels = Uid.Tbl.create 16;
       uids = Uid_kind_tbl.create 32;

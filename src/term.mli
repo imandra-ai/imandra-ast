@@ -162,6 +162,8 @@ type fun_decl = private {
 [@@deriving eq, show, ord, yojson]
 (** Function declaration *)
 
+val defined_ids : ?init:Uid.Set.t -> fun_decl -> Uid.Set.t
+
 val mk_fun_decl :
   ?codegen_tags:(string * string) list ->
   ?name_loc:Loc.t ->

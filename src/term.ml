@@ -295,6 +295,10 @@ type fun_decl = {
 [@@deriving yojson, eq, ord, show { with_path = false }]
 (** Function declaration *)
 
+let defined_ids ?(init = Uid.Set.empty) (f : fun_decl) : Uid.Set.t =
+  let set = Uid.Set.add f.name init in
+  set
+
 let mk_fun_decl ?(codegen_tags = []) ?name_loc ~loc ~name ~pat ~body () :
     fun_decl =
   let name_loc = Option.value ~default:loc name_loc in
