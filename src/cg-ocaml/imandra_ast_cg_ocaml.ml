@@ -110,7 +110,7 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
           ( String.capitalize_ascii (String.sub name 1 (String.length name - 1)),
             true )
         | K_field -> (String.uncapitalize_ascii base_name, false)
-        | K_var ->
+        | K_var | K_fun ->
           (* enclose an infix function base with parens *)
           let base_name =
             if is_base_infix base_name then
@@ -119,7 +119,6 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
               base_name
           in
           (String.uncapitalize_ascii base_name, true)
-        | K_fun -> (String.uncapitalize_ascii base_name, true)
       in
       let s =
         if must_be_unique then
@@ -137,7 +136,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
     str_of_user_id self id kind
   else (
     match kind with
-    | K_cstor | K_field | K_var | K_ty_var ->
+    | K_cstor | K_field | K_ty_var ->
       (* always flatten these *)
       str_of_user_id self id kind
     | K_fun | K_ty | K_ty_to_cbor | K_ty_of_cbor | K_mod -> Uid.name id
