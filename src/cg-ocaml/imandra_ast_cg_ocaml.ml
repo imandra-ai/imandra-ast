@@ -214,7 +214,15 @@ let rec cg_pat (self : state) (p : Term.pattern) : E.t =
   | Term.P_or (a, b) -> E.vbar [ recurse a; recurse b ]
   | Term.P_construct { c; args; lbls = None; _ } ->
     E.app_cstor (str_of_id self c K_cstor) (List.map recurse args)
-  | Term.P_construct { c; args; lbls = Some lbls; _ } -> assert false (* TODO *)
+  | Term.P_construct { c; args; lbls = Some lbls } ->
+    assert (List.length args = List.length lbls);
+    E.app_cstor (str_of_id self c K_cstor)
+      [
+        E.record
+        @@ List.map2
+             (fun f p -> (str_of_id self f K_field, recurse p))
+             lbls args;
+      ]
   | Term.P_record (_, rows) ->
     E.record
       (List.map (fun (f, p) -> (str_of_id self f K_field, recurse p)) rows)
@@ -267,8 +275,14 @@ let rec cg_term (self : state) (t : Term.t) : E.t =
     | Term.Construct { c; args; lbls = None; _ } ->
       E.app_cstor (str_of_id self c K_cstor) (List.map recurse args)
     | Term.Construct { c; args; lbls = Some lbls; _ } ->
-      (* TODO *)
-      E.raw_f "assert false (* TODO: construct with labels *)"
+      assert (List.length lbls = List.length args);
+      E.app_cstor (str_of_id self c K_cstor)
+        [
+          E.record
+          @@ List.map2
+               (fun f arg -> (str_of_id self f K_field, recurse arg))
+               lbls args;
+        ]
     | Term.Record (_, rows, rest) ->
       let rows =
         List.map (fun (f, x) -> (str_of_id self f K_field, recurse x)) rows
