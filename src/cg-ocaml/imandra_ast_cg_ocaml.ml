@@ -64,9 +64,12 @@ let gensym (self : state) (base : string) : string =
   loop 0
 
 let is_base_infix s =
-  match s.[0] with
-  | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
-  | _ -> true
+  match s with
+  | "mod" | "land" | "lor" | "lxor" -> true
+  | _ ->
+    (match s.[0] with
+    | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
+    | _ -> true)
 
 let is_infix s =
   let base = Util.chop_path s in
