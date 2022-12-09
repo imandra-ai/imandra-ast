@@ -65,7 +65,7 @@ let gensym (self : state) (base : string) : string =
 
 let is_base_infix s =
   match s with
-  | "mod" | "land" | "lor" | "lxor" -> true
+  | "mod" | "land" | "lor" | "lxor" | "lsr" | "asr" | "lsl" -> true
   | _ ->
     (match s.[0] with
     | 'a' .. 'z' | 'A' .. 'Z' | '_' -> false
