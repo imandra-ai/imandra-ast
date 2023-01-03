@@ -458,7 +458,9 @@ let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
                 ];
             ]
           in
-          E.(app_cstor c vars --> app_cstor "`Array" [ E.list_ cbor_args ])
+          E.(
+            app_cstor c vars
+            --> app_cstor "`Map" [ E.list_ [ E.tuple cbor_args ] ])
         | _, Some lbls ->
           assert (List.length lbls = List.length args);
           let pat =
@@ -490,7 +492,7 @@ let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
                 ];
             ]
           in
-          E.(pat --> app_cstor "`Array" [ E.list_ cbor_args ])
+          E.(pat --> app_cstor "`Map" [ E.list_ [ E.tuple cbor_args ] ])
       in
       let cases = E.vbar @@ List.map conv_cstor cstors in
       E.match_ expr_self cases
@@ -608,7 +610,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
                  (fun i ty -> cg_ty_of_cbor self ~clique ty (E.var_f "_x_%d" i))
                  args
           in
-          E.(app_cstor "`Array" [ E.list_ cbor_args ] --> rhs)
+          E.(app_cstor "`Map" [ E.list_ [ E.tuple cbor_args ] ] --> rhs)
         | _, Some lbls ->
           (* TODO *)
           assert (List.length lbls = List.length args);
@@ -632,7 +634,7 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
             |> List.split
           in
           let rhs = E.(let_l bs @@ app_cstor c [ record fields ]) in
-          E.(app_cstor "`Array" [ E.list_ cbor_args ] --> rhs)
+          E.(app_cstor "`Map" [ E.list_ [ E.tuple cbor_args ] ] --> rhs)
       in
       let else_case =
         E.(
