@@ -446,18 +446,16 @@ let cg_ty_decl_to_cbor (self : state) ~clique (ty_def : Type.def) :
         | _, None ->
           let vars = List.mapi (fun i _ -> E.var_f "_x_%d" i) args in
           let cbor_args =
-            [
-              cbor_c_as_text;
-              E.app_var "`Array"
-                [
-                  E.list_
-                  @@ List.mapi
-                       (fun i ty ->
-                         cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i))
-                       args;
-                ];
-            ]
+            List.mapi
+              (fun i ty -> cg_ty_to_cbor self ~clique ty (E.var_f "_x_%d" i))
+              args
           in
+          let cbor_args =
+            match cbor_args with
+            | [ v ] -> v
+            | _ -> E.app_var "`Array" [ E.list_ cbor_args ]
+          in
+          let cbor_args = [ cbor_c_as_text; cbor_args ] in
           E.(
             app_cstor c vars
             --> app_cstor "`Map" [ E.list_ [ E.tuple cbor_args ] ])
@@ -602,7 +600,9 @@ let cg_ty_decl_of_cbor (self : state) ~clique (ty_def : Type.def) :
         | _, None ->
           let vars = List.mapi (fun i _ -> E.var_f "_x_%d" i) args in
           let cbor_args =
-            [ cbor_c_as_text; E.app_cstor "`Array" [ E.list_ vars ] ]
+            match vars with
+            | [ v ] -> [ cbor_c_as_text; v ]
+            | _ -> [ cbor_c_as_text; E.app_cstor "`Array" [ E.list_ vars ] ]
           in
           let rhs =
             E.app_cstor c
