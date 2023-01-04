@@ -84,4 +84,45 @@ end
 
 open Imandra_prelude
 
+module BuiltinsSerde_List = struct
+  type 'a t = 'a list
+
+  let to_cbor f (self : _ t) : cbor = `Array (Caml.List.map f self)
+
+  let of_cbor f (c : cbor) : _ t =
+    match c with
+    | `Array l -> List.map f l
+    | _ -> cbor_error c "expected option"
+end
+
+module BuiltinsSerde_Option = struct
+  type 'a t = 'a option
+
+  let to_cbor f (self : _ t) : cbor =
+    match self with
+    | None -> `Null
+    | Some x -> `Array [ f x ]
+
+  let of_cbor f (c : cbor) : _ t =
+    match c with
+    | `Null -> None
+    | `Array [ x ] -> Some (f x)
+    | _ -> cbor_error c "expected option"
+end
+
+module BuiltinsSerde_Result = struct
+  type ('a, 'b) t = ('a, 'b) result
+
+  let to_cbor fok ferr (self : _ t) : cbor =
+    match self with
+    | Ok x -> `Map [ (`Text "Ok", fok x) ]
+    | Error e -> `Map [ (`Text "Err", ferr e) ]
+
+  let of_cbor fok ferr (c : cbor) : _ t =
+    match c with
+    | `Map [ (`Text "Ok", x) ] -> Ok (fok x)
+    | `Map [ (`Text "Err", e) ] -> Error (ferr e)
+    | _ -> cbor_error c "expected result"
+end
+
 [@@@ocaml.warning "-39"]

@@ -401,9 +401,19 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       (match (Uid.name c, args) with
       | "list", [ arg ] ->
         E.(
-          app_cstor "`Array"
+          app_var "BuiltinsSerde_List.to_cbor"
+            [ fun_ "x" (recurse arg (var "x")); expr ])
+      | "option", [ arg ] ->
+        E.(
+          app_var "BuiltinsSerde_Option.to_cbor"
+            [ fun_ "x" (recurse arg (var "x")); expr ])
+      | "result", [ arg1; arg2 ] ->
+        E.(
+          app_var "BuiltinsSerde_Result.to_cbor"
             [
-              app_var "Caml.List.map" [ fun_ "x" (recurse arg (var "x")); expr ];
+              fun_ "x" (recurse arg1 (var "x"));
+              fun_ "e" (recurse arg2 (var "e"));
+              expr;
             ])
       | _ ->
         let f = str_of_id self c K_ty_to_cbor in
@@ -538,14 +548,20 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
       (match (Uid.name c, args) with
       | "list", [ arg ] ->
         E.(
-          match_ expr @@ vbar
-          @@ [
-               app_cstor "`Array" [ var_f "lst" ]
-               --> app_var "Caml.List.map"
-                     [ fun_ "x" (recurse arg (var "x")); var_f "lst" ];
-               raw "_"
-               --> app_var "cbor_error" [ expr; string_lit "expected array" ];
-             ])
+          app_var "BuiltinsSerde_List.of_cbor"
+            [ fun_ "x" (recurse arg (var "x")); expr ])
+      | "option", [ arg ] ->
+        E.(
+          app_var "BuiltinsSerde_Option.of_cbor"
+            [ fun_ "x" (recurse arg (var "x")); expr ])
+      | "result", [ arg1; arg2 ] ->
+        E.(
+          app_var "BuiltinsSerde_Result.of_cbor"
+            [
+              fun_ "x" (recurse arg1 (var "x"));
+              fun_ "e" (recurse arg2 (var "e"));
+              expr;
+            ])
       | _ ->
         let f = str_of_id self c K_ty_of_cbor in
         E.app_var f [ expr ])
