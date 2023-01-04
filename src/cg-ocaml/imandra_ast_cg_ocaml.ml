@@ -97,7 +97,7 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
             else
               "cbor_of_" ^ base_name
           in
-          (String.uncapitalize_ascii base_name, true)
+          (Util.join_path mod_name @@ String.uncapitalize_ascii base_name, true)
         | K_ty_of_cbor ->
           let base_name =
             if base_name = "t" then
@@ -105,7 +105,7 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
             else
               "cbor_to_" ^ base_name
           in
-          (String.uncapitalize_ascii base_name, true)
+          (Util.join_path mod_name @@ String.uncapitalize_ascii base_name, true)
         | K_mod -> (String.capitalize_ascii base_name, true)
         | K_cstor -> (String.capitalize_ascii base_name, false)
         | K_ty_var ->
