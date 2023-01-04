@@ -82,6 +82,17 @@ module BuiltinsSerde_Bool = struct
     | _ -> cbor_error c "expected bool"
 end
 
+module BuiltinsSerde_Unit = struct
+  type t = unit
+
+  let to_cbor () : cbor = `Null
+
+  let of_cbor (c : cbor) : t =
+    match c with
+    | `Null | `Undefined -> ()
+    | _ -> cbor_error c "expected bool"
+end
+
 open Imandra_prelude
 
 module BuiltinsSerde_List = struct

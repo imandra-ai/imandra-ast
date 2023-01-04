@@ -394,6 +394,7 @@ let cg_ty_to_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
         | "real" -> "BuiltinsSerde_Q.to_cbor"
         | "string" -> "BuiltinsSerde_String.to_cbor"
         | "bool" -> "BuiltinsSerde_Bool.to_cbor"
+        | "unit" -> "BuiltinsSerde_Unit.to_cbor"
         | _name -> str_of_id self c K_ty_to_cbor
       in
       E.app_var repr [ expr ]
@@ -541,6 +542,7 @@ let cg_ty_of_cbor (self : state) ~clique (ty : Type.t) (expr : E.t) : E.t =
         | "real" -> "BuiltinsSerde_Q.of_cbor"
         | "string" -> "BuiltinsSerde_String.of_cbor"
         | "bool" -> "BuiltinsSerde_Bool.of_cbor"
+        | "unit" -> "BuiltinsSerde_Unit.of_cbor"
         | _name -> str_of_id self c K_ty_of_cbor
       in
       E.app_var repr [ expr ]
