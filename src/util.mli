@@ -31,3 +31,6 @@ val split_path : string -> string list * string
 
 val join_path : string list -> string -> string
 (** Revere of {!split_path} *)
+
+val safe_ocaml_id : string -> string
+(** Safe name for a potentially infix operator name *)

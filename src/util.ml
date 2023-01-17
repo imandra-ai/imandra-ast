@@ -54,3 +54,24 @@ let join_path x y =
 
 let chop_path s = snd @@ split_path s
 let is_qualified s = fst @@ split_path s <> []
+
+let is_infix s =
+  assert (String.length s > 0);
+  match s.[0] with
+  | '%' | '*' | '/' | '+' | '-' | '@' | '^' | '<' | '>' | '=' | '|' | '&' | '$'
+  | '~' | '?' | '!' | ':' ->
+    true
+  | _ -> false
+
+let safe_ocaml_id s =
+  let wrap s = Printf.sprintf "( %s )" s in
+  if is_qualified s then (
+    let pre, post = split_path s in
+    if is_infix post then
+      join_path pre (wrap post)
+    else
+      s
+  ) else if is_infix s then
+    wrap s
+  else
+    s

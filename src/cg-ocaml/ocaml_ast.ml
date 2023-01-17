@@ -63,7 +63,7 @@ module Expr = struct
 
   let rec pp_top out = function
     | E_const i -> fpf out "%d" i
-    | E_var s | E_glob s -> Fmt.string out s
+    | E_var s | E_glob s -> Fmt.string out (Util.safe_ocaml_id s)
     | E_ty_lbl (s, e) -> Fmt.fprintf out "%s:@[%a@]" s pp e
     | E_lbl (`Nolabel, e) -> pp out e
     | E_lbl (`Lbl s, e) -> Fmt.fprintf out "~%s:@[%a@]" s pp e
@@ -83,10 +83,13 @@ module Expr = struct
     | E_app (f, []) -> pp out f
     | E_app (f, args) ->
       fpf out "@[<1>%a@ %a@]" pp f Fmt.(list ~sep:(return "@ ") pp) args
-    | E_cstor_app (c, []) -> fpf out "%s" c
-    | E_cstor_app (c, [ x ]) -> fpf out "@[<1>%s@ %a@]" c pp x
+    | E_cstor_app (c, []) -> fpf out "%s" @@ Util.safe_ocaml_id c
+    | E_cstor_app (c, [ x ]) ->
+      fpf out "@[<1>%s@ %a@]" (Util.safe_ocaml_id c) pp x
     | E_cstor_app (c, l) ->
-      fpf out "@[<1>%s (@[%a@])@]" c Fmt.(list ~sep:(return ",@ ") pp) l
+      fpf out "@[<1>%s (@[%a@])@]" (Util.safe_ocaml_id c)
+        Fmt.(list ~sep:(return ",@ ") pp)
+        l
     | E_tyapp (s, []) -> Fmt.string out s
     | E_tyapp (s, [ x ]) -> Fmt.fprintf out "%a %s" pp_top x s
     | E_tyapp (s, l) ->
