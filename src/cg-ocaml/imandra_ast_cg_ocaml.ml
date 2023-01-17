@@ -22,7 +22,7 @@ type kind =
   | K_ty_of_cbor
   | K_var
   | K_mod
-[@@deriving eq]
+[@@deriving eq, show { with_path = false }]
 
 module Uid_kind_tbl = CCHashtbl.Make (struct
   type t = Uid.t * kind [@@deriving eq]
@@ -75,19 +75,21 @@ let is_infix s =
   let base = Util.chop_path s in
   base = "" || is_base_infix base
 
+let wrap_infix s = Printf.sprintf "( %s )" s
+
 let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
   Uid_kind_tbl.get_or_add self.uids ~k:(id, kind) ~f:(fun (id, kind) ->
       (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
-      let mod_name, base_name = Util.split_path name in
-      let base, must_be_unique =
+      let path, base_name = Util.split_path name in
+      let name, must_be_unique =
         match kind with
         | K_ty ->
           let l =
-            match (mod_name, base_name) with
+            match (path, base_name) with
             | [], _ -> [ base_name ]
-            | _, "t" -> mod_name
-            | _ -> mod_name @ [ base_name ]
+            | _, "t" -> path
+            | _ -> path @ [ base_name ]
           in
           (String.uncapitalize_ascii @@ String.concat "__" l, true)
         | K_ty_to_cbor ->
@@ -97,7 +99,10 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
             else
               "cbor_of_" ^ base_name
           in
-          (Util.join_path mod_name @@ String.uncapitalize_ascii base_name, true)
+          ( String.uncapitalize_ascii
+            @@ Util.join_path ~sep:"__" path
+            @@ String.uncapitalize_ascii base_name,
+            true )
         | K_ty_of_cbor ->
           let base_name =
             if base_name = "t" then
@@ -105,33 +110,44 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
             else
               "cbor_to_" ^ base_name
           in
-          (Util.join_path mod_name @@ String.uncapitalize_ascii base_name, true)
-        | K_mod -> (String.capitalize_ascii base_name, true)
-        | K_cstor -> (String.capitalize_ascii base_name, false)
-        | K_ty_var ->
-          (* remove the "'" *)
-          ( String.capitalize_ascii (String.sub name 1 (String.length name - 1)),
+          ( String.uncapitalize_ascii @@ Util.join_path ~sep:"__" path base_name,
             true )
+        | K_mod ->
+          (String.capitalize_ascii @@ Util.join_path path base_name, true)
+        | K_cstor ->
+          if is_infix base_name then
+            (* for "::" mostly *)
+            (base_name, false)
+          else
+            ( String.capitalize_ascii @@ Util.join_path ~sep:"__" path base_name,
+              false )
+        | K_ty_var ->
+          (* remove the leading "'" *)
+          let name = String.sub name 1 (String.length name - 1) in
+          (String.uncapitalize_ascii name, true)
         | K_field -> (String.uncapitalize_ascii base_name, false)
         | K_var | K_fun ->
           (* enclose an infix function base with parens *)
+          let name = Util.join_path ~sep:"__" path base_name in
           let base_name =
             if is_base_infix base_name then
-              spf "( %s )" base_name
+              wrap_infix name
             else
-              base_name
+              name
           in
           (String.uncapitalize_ascii base_name, true)
       in
-      let s =
+
+      let final_name =
         if must_be_unique then
-          gensym self base
+          gensym self name
         else
-          base
+          name
       in
-      Str_tbl.add self.seen s ();
-      Uid_kind_tbl.add self.uids (id, kind) s;
-      s)
+
+      Str_tbl.add self.seen final_name ();
+      Uid_kind_tbl.add self.uids (id, kind) final_name;
+      final_name)
 
 (** find or create OCaml symbol for this ID *)
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
@@ -140,7 +156,7 @@ let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   else (
     match kind with
     | K_cstor | K_field | K_ty_var | K_ty_to_cbor | K_ty_of_cbor ->
-      (* always flatten these *)
+      (* always flatten these, even from pre-existing code *)
       str_of_user_id self id kind
     | K_fun | K_ty | K_mod | K_var -> Uid.name id
   )
@@ -252,16 +268,7 @@ let rec cg_term (self : state) (t : Term.t) : E.t =
     | Term.Apply (_, f, args) -> E.app (recurse f) (List.map recurse_arg args)
     | Term.Ident x ->
       let s = str_of_id self x.id K_var in
-      (* make sure to protect partially applied infix symbols and the likes *)
-      let components, base = Util.split_path s in
-      E.var
-      @@
-      if is_base_infix base then (
-        (* enclose an infix function base with parens *)
-        let base = spf "( %s )" base in
-        Util.join_path components base
-      ) else
-        s
+      E.var s
     | Term.Tuple (_, l) -> E.tuple (List.map recurse l)
     | Term.True -> E.var "true"
     | Term.False -> E.var "false"
