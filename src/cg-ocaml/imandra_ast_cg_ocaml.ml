@@ -117,7 +117,7 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
         | K_cstor ->
           if is_infix base_name then
             (* for "::" mostly *)
-            (base_name, false)
+            (wrap_infix base_name, false)
           else
             ( String.capitalize_ascii @@ Util.join_path ~sep:"__" path base_name,
               false )
