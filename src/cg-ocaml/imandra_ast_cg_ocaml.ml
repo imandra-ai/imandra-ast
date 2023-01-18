@@ -77,13 +77,15 @@ let is_infix s =
 
 let wrap_infix s = Printf.sprintf "( %s )" s
 
-let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
+let str_of_user_id ?(can_rename = true) (self : state) (id : Uid.t)
+    (kind : kind) : string =
   Uid_kind_tbl.get_or_add self.uids ~k:(id, kind) ~f:(fun (id, kind) ->
       (* FIXME: escape OCaml keywords *)
       let name = Uid.name id in
       let path, base_name = Util.split_path name in
       let name, must_be_unique =
         match kind with
+        | K_ty when not can_rename -> (name, false)
         | K_ty ->
           let l =
             match (path, base_name) with
@@ -126,6 +128,15 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
           let name = String.sub name 1 (String.length name - 1) in
           (String.uncapitalize_ascii name, true)
         | K_field -> (String.uncapitalize_ascii base_name, false)
+        | (K_var | K_fun) when not can_rename ->
+          let base_name =
+            if is_base_infix base_name then
+              wrap_infix base_name
+            else
+              base_name
+          in
+          let name = Util.join_path path base_name in
+          (name, false)
         | K_var | K_fun ->
           (* enclose an infix function base with parens *)
           let name = Util.join_path ~sep:"__" path base_name in
@@ -139,7 +150,7 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
       in
 
       let final_name =
-        if must_be_unique then
+        if must_be_unique && can_rename then
           gensym self name
         else
           name
@@ -153,13 +164,8 @@ let str_of_user_id (self : state) (id : Uid.t) (kind : kind) : string =
 let str_of_id (self : state) (id : Uid.t) (kind : kind) : string =
   if Uid.Set.mem id self.user_uids then
     str_of_user_id self id kind
-  else (
-    match kind with
-    | K_cstor | K_field | K_ty_var | K_ty_to_cbor | K_ty_of_cbor ->
-      (* always flatten these, even from pre-existing code *)
-      str_of_user_id self id kind
-    | K_fun | K_ty | K_mod | K_var -> Uid.name id
-  )
+  else
+    str_of_user_id ~can_rename:false self id kind
 
 let add_decl (self : state) (d : A.Decl.t) =
   self.code.decls <- d :: self.code.decls
