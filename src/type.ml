@@ -360,6 +360,22 @@ let rec drop_n_args defs n ty : t =
     | _ -> ty
   )
 
+let defined_ids ?(init = Uid.Set.empty) (d : def) : Uid.Set.t =
+  let set = Uid.Set.add d.name init in
+  match d.decl with
+  | Algebraic cstors ->
+    List.fold_left
+      (fun set { c; labels; _ } ->
+        let set = Uid.Set.add c set in
+        Option.fold ~none:set ~some:(fun l -> Uid.Set.add_list set l) labels)
+      set cstors
+  | Record rows ->
+    List.fold_left (fun set { f; _ } -> Uid.Set.add f set) set rows
+  | Alias _ -> set
+  | Skolem -> set
+  | Builtin _ -> set
+  | Other -> set
+
 let rec in_out_types defs (ty : t) : _ * t =
   let ty = chase_shallow_ defs ty in
   match view ty with

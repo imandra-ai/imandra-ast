@@ -29,5 +29,6 @@ val chop_path : string -> string
 val split_path : string -> string list * string
 (** Split into module prefix and identifier *)
 
-val join_path : string list -> string -> string
-(** Revere of {!split_path} *)
+val join_path : ?sep:string -> string list -> string -> string
+(** Revere of {!split_path}
+  @param sep if provided, use this instead of "." to separate components *)

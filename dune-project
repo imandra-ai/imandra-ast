@@ -10,10 +10,15 @@
 
 (package
   (name imandra-ast)
+  (synopsis "AST exported from imandra, used for further code generation")
   (depends
+    (dune (>= 2.0))
     (yojson (>= 1.6))
     cmdliner
     ppx_deriving
     ppx_deriving_yojson
+    (imandra-prelude :with-test)
+    (yojson :with-test)
+    (cbor :with-test)
     (zarith (>= 1.12))
     (containers (and (>= 3.7) (< 4.)))))
